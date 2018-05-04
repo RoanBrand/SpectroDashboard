@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+	<link rel="stylesheet" href="css/bootstrap.min.css">
+
+	<title>SpectroDashboard</title>
+
+	<script src="js/jquery-3.2.1.min.js"></script>
+	<script src="js/bootstrap.bundle.min.js"></script>
+</head>
+<body>
+
+<table class="table table-striped">
+	<thead>
+	<tr id="table-header-row">
+		<th scope="col">#</th>
+	</tr>
+	</thead>
+	<tbody id="table-body">
+	<tr>
+		<td>hi</td>
+	</tr>
+	</tbody>
+</table>
+
+<script>
+	$(function() {
+		$.get("results", null, function(res) {
+			console.log(res);
+			if (res.length > 0) {
+				if (res[0].results.length > 0) {
+					var tblHeadings = '<th scope="col">TimeStamp</th><th scope="col">Sample Name</th><th scope="col">Furnace</th>';
+					for (var i = 0; i < res[0].results.length; i++) {
+						tblHeadings += '<th scope="col">' + res[0].results[i].element + '</th>';
+					}
+					$("#table-header-row").html(tblHeadings);
+				}
+			}
+			$("#table-body").empty();
+			for (var i = 0; i < res.length; i++) {
+				var tblDataRow =
+						'<tr><td>' + (new Date(res[i].time_stamp)).toLocaleString('en-GB') + '</td>'
+						+ '<td>' + res[i].sample_name + '</td>'
+						+ '<td>' + res[i].furnace + '</td>';
+				for (var j = 0; j < res[i].results.length; j++) {
+					tblDataRow += '<td>' + parseFloat(Math.round(res[i].results[j].value * 1000) / 1000).toFixed(3) + '</td>';
+				}
+				tblDataRow += '</tr>';
+				$("#table-body").append(tblDataRow);
+			}
+		});
+	});
+</script>
+
+</body>
+</html>
