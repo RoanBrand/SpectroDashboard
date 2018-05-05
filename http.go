@@ -17,7 +17,7 @@ func startHTTPServer(port string) error {
 }
 
 func resultEndpoint(w http.ResponseWriter, r *http.Request) {
-	results, err := queryResults()
+	results, err := queryResults(conf.NumberOfResults)
 	if err != nil {
 		errMsg := "Error querying results: " + err.Error()
 		log.Println(errMsg)

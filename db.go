@@ -47,9 +47,9 @@ var elementMap = map[string]string{
 	"0x00000025-Pb": "Pb",
 }
 
-func queryResults() ([]*record, error) {
+func queryResults(numResults int) ([]*record, error) {
 	sampleRows, err := db.Query(`
-		SELECT TOP 20
+		SELECT TOP ` + strconv.Itoa(numResults) + ` 
 		SampleResultID, SampleName, Quality
 		FROM KSampleResultTbl
 		ORDER BY SampleResultID DESC;`)

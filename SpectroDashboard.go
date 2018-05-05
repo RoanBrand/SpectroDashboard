@@ -9,6 +9,7 @@ import (
 )
 
 var logger service.Logger
+var conf *config
 
 type app struct{}
 
@@ -17,7 +18,8 @@ func (p *app) Start(s service.Service) error {
 	return nil
 }
 func (p *app) run() {
-	conf, err := loadConfig("config.json")
+	var err error
+	conf, err = loadConfig("config.json")
 	if err != nil {
 		panic(err)
 	}
