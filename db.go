@@ -1,11 +1,12 @@
 package main
 
 import (
-	"database/sql"
-	"strconv"
 	"time"
+	"strconv"
+	"database/sql"
 )
 
+/*
 var db *sql.DB
 
 func startDBConn(dsn string) error {
@@ -17,7 +18,7 @@ func startDBConn(dsn string) error {
 
 	return nil
 }
-
+*/
 type record struct {
 	SampleId   int64            `json:"sample_id"`
 	SampleName string           `json:"sample_name"`
@@ -32,7 +33,13 @@ type elementResult struct {
 	Value   float64 `json:"value"`
 }
 
-func queryResults(numResults int) ([]*record, error) {
+func queryResults(dsn string, numResults int) ([]*record, error) {
+	db, err := sql.Open("adodb", dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
 	sampleRows, err := db.Query(`
 		SELECT TOP ` + strconv.Itoa(numResults) + ` 
 		SampleResultID, SampleName, Quality

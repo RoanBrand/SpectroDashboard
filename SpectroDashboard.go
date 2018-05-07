@@ -24,10 +24,10 @@ func (p *app) run() {
 		panic(err)
 	}
 
-	err = startDBConn(conf.DataSource)
+	/*err = startDBConn(conf.DataSource)
 	if err != nil {
 		panic(err)
-	}
+	}*/
 
 	setupHTTPServer()
 	err = startHTTPServer(conf.HTTPServerPort)
