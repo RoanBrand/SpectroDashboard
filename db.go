@@ -63,14 +63,15 @@ func queryResults(numResults int) ([]*record, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer measureResultRows.Close()
 
 		for measureResultRows.Next() {
 			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp)
 			if err != nil {
+				measureResultRows.Close()
 				return nil, err
 			}
 		}
+		measureResultRows.Close()
 	}
 
 	for _, rec := range recs {
@@ -82,7 +83,6 @@ func queryResults(numResults int) ([]*record, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer resultValueRows.Close()
 		rec.Results = make([]*elementResult, len(elementOrder))
 
 		for resultValueRows.Next() {
@@ -91,6 +91,7 @@ func queryResults(numResults int) ([]*record, error) {
 
 			err := resultValueRows.Scan(&elCode, &elValue)
 			if err != nil {
+				resultValueRows.Close()
 				return nil, err
 			}
 			if elValue == 0.0 {
@@ -103,6 +104,7 @@ func queryResults(numResults int) ([]*record, error) {
 				}
 			}
 		}
+		resultValueRows.Close()
 	}
 	return recs, nil
 }
