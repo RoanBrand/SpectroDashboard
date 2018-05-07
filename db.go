@@ -19,32 +19,17 @@ func startDBConn(dsn string) error {
 }
 
 type record struct {
-	SampleId   int64           `json:"sample_id"`
-	SampleName string          `json:"sample_name"`
-	Furnace    string          `json:"furnace"`
-	MeasureId  int64           `json:"measure_id"`
-	TimeStamp  time.Time       `json:"time_stamp"`
-	Results    []elementResult `json:"results"`
+	SampleId   int64            `json:"sample_id"`
+	SampleName string           `json:"sample_name"`
+	Furnace    string           `json:"furnace"`
+	MeasureId  int64            `json:"measure_id"`
+	TimeStamp  time.Time        `json:"time_stamp"`
+	Results    []*elementResult `json:"results"`
 }
 
 type elementResult struct {
 	Element string  `json:"element"`
 	Value   float64 `json:"value"`
-}
-
-var elementMap = map[string]string{
-	"0x00000001-C":  "C",
-	"0x00000003-Si": "Si",
-	"0x00000005-Mn": "Mn",
-	"0x00000007-P":  "P",
-	"0x00000009-S":  "S",
-	"0x00000019-Cu": "Cu",
-	"0x0000000B-Cr": "Cr",
-	"0x00000015-Al": "Al",
-	"0x0000001F-Ti": "Ti",
-	"0x00000027-Sn": "Sn",
-	"0x00000031-Zn": "Zn",
-	"0x00000025-Pb": "Pb",
 }
 
 func queryResults(numResults int) ([]*record, error) {
@@ -98,8 +83,7 @@ func queryResults(numResults int) ([]*record, error) {
 			return nil, err
 		}
 		defer resultValueRows.Close()
-		rec.Results = make([]elementResult, 0)
-		els := make(map[string]struct{})
+		rec.Results = make([]*elementResult, len(elementOrder))
 
 		for resultValueRows.Next() {
 			var elCode string
@@ -109,12 +93,14 @@ func queryResults(numResults int) ([]*record, error) {
 			if err != nil {
 				return nil, err
 			}
-			if _, ok := els[elCode]; ok || elValue == 0.0 {
+			if elValue == 0.0 {
 				continue
 			}
 			if el, ok := elementMap[elCode]; ok {
-				els[elCode] = struct{}{}
-				rec.Results = append(rec.Results, elementResult{Element: el, Value: elValue})
+				order := elementOrder[el]
+				if rec.Results[order] == nil {
+					rec.Results[order] = &elementResult{Element: el, Value: elValue}
+				}
 			}
 		}
 	}
