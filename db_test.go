@@ -32,3 +32,18 @@ func TestResultsRetrieval(t *testing.T) {
 	}
 	logStats(t)
 }
+
+func BenchmarkResultRetrieval(b *testing.B) {
+	err := startDBConn(dsn)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := queryResults(numResults)
+		if err != nil {
+			b.Fatalf("Error retrieving results on iteration %d: %s", i, err)
+		}
+	}
+}
