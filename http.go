@@ -13,6 +13,7 @@ func setupHTTPServer() {
 }
 
 func startHTTPServer(port string) error {
+	log.Println("Starting SpectroDashboard service")
 	return http.ListenAndServe(":"+port, nil)
 }
 

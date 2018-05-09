@@ -3,8 +3,10 @@ package main
 import (
 	"flag"
 	"log"
+	"path/filepath"
 
 	"github.com/kardianos/service"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 var logger service.Logger
@@ -22,6 +24,12 @@ func (p *app) run() {
 	if err != nil {
 		panic(err)
 	}
+
+	log.SetOutput(&lumberjack.Logger{
+		Filename:   filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"),
+		MaxBackups: 3,
+		MaxAge:     28, //days
+	})
 
 	setupHTTPServer()
 	err = startHTTPServer(conf.HTTPServerPort)
