@@ -12,17 +12,15 @@
 </head>
 <body>
 
+<div id="banner-alert" class="alert alert-danger" style="display: none;" role="alert"></div>
+
 <table class="table table-striped">
 	<thead>
 	<tr id="table-header-row">
-		<th scope="col">#</th>
-	</tr>
+        <th><h3>LOADING...</h3></th>
+    </tr>
 	</thead>
-	<tbody id="table-body">
-	<tr>
-		<td>hi</td>
-	</tr>
-	</tbody>
+	<tbody id="table-body"></tbody>
 </table>
 
 <script>
@@ -42,9 +40,9 @@
         $("#table-body").empty();
         for (var i = 0; i < res.length; i++) {
             var tblDataRow =
-                    '<tr><td>' + (new Date(res[i].time_stamp)).toLocaleString('en-GB') + '</td>'
-                    + '<td>' + res[i].sample_name + '</td>'
-                    + '<td>' + res[i].furnace + '</td>';
+                '<tr><td>' + (new Date(res[i].time_stamp)).toLocaleString('en-GB') + '</td>'
+                + '<td>' + res[i].sample_name + '</td>'
+                + '<td>' + res[i].furnace + '</td>';
             for (var j = 0; j < res[i].results.length; j++) {
                 tblDataRow += '<td>' + parseFloat(Math.round(res[i].results[j].value * 1000) / 1000).toFixed(3) + '</td>';
             }
@@ -54,9 +52,24 @@
 	};
 
 	var getResults = function() {
-        $.get("results", null, function(res) {
-            populateTable(res);
-        });
+        $.get("results")
+			.done(function(res) {
+                $("#banner-alert").hide();
+				populateTable(res);
+			})
+			.fail(function(err) {
+				console.error(err);
+                $("#table-header-row").empty();
+                $("#table-body").empty();
+                if (err.readyState === 0) {
+                    // browser unable to open tcp connection.
+					var dst = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
+                    $("#banner-alert").html('Unable to make connection to server "' + dst + '"')
+				} else {
+                    $("#banner-alert").html(err.responseText);
+				}
+                $("#banner-alert").show();
+			});
 	};
 
 	// Init
