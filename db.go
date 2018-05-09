@@ -1,9 +1,11 @@
 package main
 
 import (
-	"time"
-	"strconv"
 	"database/sql"
+	"strconv"
+	"time"
+
+	_ "github.com/mattn/go-adodb"
 )
 
 /*

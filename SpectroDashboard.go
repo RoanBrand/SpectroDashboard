@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/kardianos/service"
-	_ "github.com/mattn/go-adodb"
 )
 
 var logger service.Logger
