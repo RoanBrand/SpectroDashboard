@@ -47,7 +47,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 	}
 	defer sampleRows.Close()
 
-	recs := make([]*record, 0)
+	recs := make([]*record, 0, numResults)
 
 	for sampleRows.Next() {
 		rec := &record{}
@@ -60,47 +60,27 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 
 	for _, rec := range recs {
 		measureResultRows, err := db.Query(`
-			SELECT TOP 1
-			MeasureResultID, Timestamp
-			FROM KMeasureResultTbl
-			WHERE SampleResultID = ` + strconv.FormatInt(rec.SampleId, 10) + ` AND ResultType = 1;`)
+			SELECT
+			m.MeasureResultID, m.Timestamp, r.ResultKey, r.Value
+			FROM KMeasureResultTbl m
+			LEFT JOIN KResultValueTbl r ON ((r.MeasureResultID = m.MeasureResultID) AND (r.ResultType = 2) AND (r.Value > 0.0))
+			WHERE m.SampleResultID = ` + strconv.FormatInt(rec.SampleId, 10) + ` AND m.ResultType = 1;`)
 		if err != nil {
 			return nil, err
 		}
 
+		rec.Results = make([]*elementResult, len(elementOrder))
+
 		for measureResultRows.Next() {
-			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp)
+			var elCode string
+			var elValue float64
+
+			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp, &elCode, &elValue)
 			if err != nil {
 				measureResultRows.Close()
 				return nil, err
 			}
-		}
-		measureResultRows.Close()
-	}
 
-	for _, rec := range recs {
-		resultValueRows, err := db.Query(`
-			SELECT
-			ResultKey, Value
-			FROM KResultValueTbl
-			WHERE MeasureResultID = ` + strconv.FormatInt(rec.MeasureId, 10) + `AND ResultType = 2`)
-		if err != nil {
-			return nil, err
-		}
-		rec.Results = make([]*elementResult, len(elementOrder))
-
-		for resultValueRows.Next() {
-			var elCode string
-			var elValue float64
-
-			err := resultValueRows.Scan(&elCode, &elValue)
-			if err != nil {
-				resultValueRows.Close()
-				return nil, err
-			}
-			if elValue == 0.0 {
-				continue
-			}
 			if el, ok := elementMap[elCode]; ok {
 				order := elementOrder[el]
 				if rec.Results[order] == nil {
@@ -108,7 +88,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 				}
 			}
 		}
-		resultValueRows.Close()
+		measureResultRows.Close()
 	}
 	return recs, nil
 }
