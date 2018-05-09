@@ -1,9 +1,9 @@
 package main
 
 import (
-	"net/http"
-	"log"
 	"encoding/json"
+	"log"
+	"net/http"
 	"path/filepath"
 )
 
@@ -17,7 +17,7 @@ func startHTTPServer(port string) error {
 }
 
 func resultEndpoint(w http.ResponseWriter, r *http.Request) {
-	results, err := queryResults(conf.NumberOfResults)
+	results, err := queryResults(conf.DataSource, conf.NumberOfResults)
 	if err != nil {
 		errMsg := "Error querying results: " + err.Error()
 		log.Println(errMsg)

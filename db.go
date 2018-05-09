@@ -3,20 +3,15 @@ package main
 import (
 	"database/sql"
 	"strconv"
+	"sync"
 	"time"
+
+	_ "github.com/mattn/go-adodb"
 )
 
-var db *sql.DB
-
-func startDBConn(dsn string) error {
-	var err error
-	db, err = sql.Open("adodb", dsn)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
+// Driver has problems with multiple connections.
+// DB is a file on disk anyway.
+var querySerializer sync.Mutex
 
 type record struct {
 	SampleId   int64            `json:"sample_id"`
@@ -32,7 +27,16 @@ type elementResult struct {
 	Value   float64 `json:"value"`
 }
 
-func queryResults(numResults int) ([]*record, error) {
+func queryResults(dsn string, numResults int) ([]*record, error) {
+	querySerializer.Lock()
+	defer querySerializer.Unlock()
+
+	db, err := sql.Open("adodb", dsn)
+	if err != nil {
+		return nil, err
+	}
+	defer db.Close()
+
 	sampleRows, err := db.Query(`
 		SELECT TOP ` + strconv.Itoa(numResults) + ` 
 		SampleResultID, SampleName, Quality
@@ -63,14 +67,15 @@ func queryResults(numResults int) ([]*record, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer measureResultRows.Close()
 
 		for measureResultRows.Next() {
 			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp)
 			if err != nil {
+				measureResultRows.Close()
 				return nil, err
 			}
 		}
+		measureResultRows.Close()
 	}
 
 	for _, rec := range recs {
@@ -82,7 +87,6 @@ func queryResults(numResults int) ([]*record, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer resultValueRows.Close()
 		rec.Results = make([]*elementResult, len(elementOrder))
 
 		for resultValueRows.Next() {
@@ -91,6 +95,7 @@ func queryResults(numResults int) ([]*record, error) {
 
 			err := resultValueRows.Scan(&elCode, &elValue)
 			if err != nil {
+				resultValueRows.Close()
 				return nil, err
 			}
 			if elValue == 0.0 {
@@ -103,6 +108,7 @@ func queryResults(numResults int) ([]*record, error) {
 				}
 			}
 		}
+		resultValueRows.Close()
 	}
 	return recs, nil
 }

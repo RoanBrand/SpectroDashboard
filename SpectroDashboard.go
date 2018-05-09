@@ -5,7 +5,6 @@ import (
 	"log"
 
 	"github.com/kardianos/service"
-	_ "github.com/mattn/go-adodb"
 )
 
 var logger service.Logger
@@ -20,11 +19,6 @@ func (p *app) Start(s service.Service) error {
 func (p *app) run() {
 	var err error
 	conf, err = loadConfig("config.json")
-	if err != nil {
-		panic(err)
-	}
-
-	err = startDBConn(conf.DataSource)
 	if err != nil {
 		panic(err)
 	}
