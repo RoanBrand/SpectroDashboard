@@ -3,10 +3,15 @@ package main
 import (
 	"database/sql"
 	"strconv"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-adodb"
 )
+
+// Driver has problems with multiple connections.
+// DB is a file on disk anyway.
+var querySerializer sync.Mutex
 
 /*
 var db *sql.DB
@@ -36,6 +41,9 @@ type elementResult struct {
 }
 
 func queryResults(dsn string, numResults int) ([]*record, error) {
+	querySerializer.Lock()
+	defer querySerializer.Unlock()
+
 	db, err := sql.Open("adodb", dsn)
 	if err != nil {
 		return nil, err

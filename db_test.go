@@ -9,7 +9,7 @@ import (
 
 const dsn = "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=A:/Projects/SpectroDisplay/AccessDB Example/SpvDB_MeasureResults.mdb;"
 const numResults = 100
-const numRetrievals = 4
+const numRetrievals = 10
 
 func logStats(t *testing.T) {
 	var m runtime.MemStats
