@@ -13,19 +13,6 @@ import (
 // DB is a file on disk anyway.
 var querySerializer sync.Mutex
 
-/*
-var db *sql.DB
-
-func startDBConn(dsn string) error {
-	var err error
-	db, err = sql.Open("adodb", dsn)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-*/
 type record struct {
 	SampleId   int64            `json:"sample_id"`
 	SampleName string           `json:"sample_name"`
