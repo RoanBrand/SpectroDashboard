@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 
 	db, err := sql.Open("adodb", dsn)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error opening db: %v", err)
 	}
 	defer db.Close()
 
@@ -43,18 +44,29 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 		FROM KSampleResultTbl
 		ORDER BY SampleResultID DESC;`)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error querying 'KSampleResultTbl': %v", err)
 	}
 	defer sampleRows.Close()
 
 	recs := make([]*record, 0, numResults)
 
 	for sampleRows.Next() {
+		var sampleName sql.NullString
+		var furnace sql.NullString
 		rec := &record{}
-		err := sampleRows.Scan(&rec.SampleId, &rec.SampleName, &rec.Furnace)
+
+		err := sampleRows.Scan(&rec.SampleId, &sampleName, &furnace)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error scanning row from 'KSampleResultTbl': %v", err)
 		}
+
+		if sampleName.Valid {
+			rec.SampleName = sampleName.String
+		}
+		if furnace.Valid {
+			rec.Furnace = furnace.String
+		}
+
 		recs = append(recs, rec)
 	}
 
@@ -66,7 +78,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 			LEFT JOIN KResultValueTbl r ON ((r.MeasureResultID = m.MeasureResultID) AND (r.ResultType = 2) AND (r.Value > 0.0))
 			WHERE m.SampleResultID = ` + strconv.FormatInt(rec.SampleId, 10) + ` AND m.ResultType = 1;`)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error querying 'KMeasureResultTbl': %v", err)
 		}
 
 		rec.Results = make([]*elementResult, len(elementOrder))
@@ -78,7 +90,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp, &elCode, &elValue)
 			if err != nil {
 				measureResultRows.Close()
-				return nil, err
+				return nil, fmt.Errorf("error scanning row from 'KMeasureResultTbl': %v", err)
 			}
 
 			if el, ok := elementMap[elCode]; ok {
