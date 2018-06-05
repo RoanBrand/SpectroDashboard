@@ -70,7 +70,8 @@ func queryResults(dsn string, numResults int) ([]record, error) {
 		recs = append(recs, rec)
 	}
 
-	for _, rec := range recs {
+	for i := range recs {
+		rec := &recs[i]
 		measureResultRows, err := db.Query(`
 			SELECT
 			m.MeasureResultID, m.Timestamp, r.ResultKey, r.Value
