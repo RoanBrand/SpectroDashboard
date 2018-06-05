@@ -15,12 +15,12 @@ import (
 var querySerializer sync.Mutex
 
 type record struct {
-	SampleId   int64            `json:"sample_id"`
-	SampleName string           `json:"sample_name"`
-	Furnace    string           `json:"furnace"`
-	MeasureId  int64            `json:"measure_id"`
-	TimeStamp  time.Time        `json:"time_stamp"`
-	Results    []*elementResult `json:"results"`
+	SampleId   int64           `json:"sample_id"`
+	SampleName string          `json:"sample_name"`
+	Furnace    string          `json:"furnace"`
+	MeasureId  int64           `json:"measure_id"`
+	TimeStamp  time.Time       `json:"time_stamp"`
+	Results    []elementResult `json:"results"`
 }
 
 type elementResult struct {
@@ -28,7 +28,7 @@ type elementResult struct {
 	Value   float64 `json:"value"`
 }
 
-func queryResults(dsn string, numResults int) ([]*record, error) {
+func queryResults(dsn string, numResults int) ([]record, error) {
 	querySerializer.Lock()
 	defer querySerializer.Unlock()
 
@@ -48,12 +48,12 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 	}
 	defer sampleRows.Close()
 
-	recs := make([]*record, 0, numResults)
+	recs := make([]record, 0, numResults)
 
 	for sampleRows.Next() {
 		var sampleName sql.NullString
 		var furnace sql.NullString
-		rec := &record{}
+		rec := record{}
 
 		err := sampleRows.Scan(&rec.SampleId, &sampleName, &furnace)
 		if err != nil {
@@ -81,7 +81,7 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 			return nil, fmt.Errorf("error querying 'KMeasureResultTbl': %v", err)
 		}
 
-		rec.Results = make([]*elementResult, len(elementOrder))
+		rec.Results = make([]elementResult, len(elementOrder))
 
 		for measureResultRows.Next() {
 			var elCode string
@@ -95,8 +95,10 @@ func queryResults(dsn string, numResults int) ([]*record, error) {
 
 			if el, ok := elementMap[elCode]; ok {
 				order := elementOrder[el]
-				if rec.Results[order] == nil {
-					rec.Results[order] = &elementResult{Element: el, Value: elValue}
+				res := &rec.Results[order]
+				if res.Element == "" {
+					res.Element = el
+					res.Value = elValue
 				}
 			}
 		}
