@@ -1,4 +1,4 @@
-package main
+package mdb_spectro
 
 import (
 	"fmt"
@@ -28,7 +28,7 @@ func TestResultsRetrieval(t *testing.T) {
 
 	for i := 0; i < numRetrievals; i++ {
 		go func(i int) {
-			res, err := queryResults(dsn, numResults)
+			res, err := GetResults(dsn, numResults)
 			if err != nil {
 				errPipe <- fmt.Sprintf("Error retrieving results on iteration %d: %s", i, err)
 			} else if len(res) != numResults {
@@ -54,7 +54,7 @@ func BenchmarkResultRetrieval(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		go func(i int) {
-			res, err := queryResults(dsn, numResults)
+			res, err := GetResults(dsn, numResults)
 			if err != nil {
 				errPipe <- fmt.Sprintf("Error retrieving results on iteration %d: %s", i, err)
 			} else if len(res) != numResults {

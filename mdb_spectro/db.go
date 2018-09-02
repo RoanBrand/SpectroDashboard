@@ -1,4 +1,4 @@
-package main
+package mdb_spectro
 
 import (
 	"database/sql"
@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/RoanBrand/SpectroDashboard/sample"
 	_ "github.com/mattn/go-adodb"
 )
 
@@ -15,20 +16,36 @@ import (
 var querySerializer sync.Mutex
 
 type record struct {
-	SampleId   int64           `json:"sample_id"`
-	SampleName string          `json:"sample_name"`
-	Furnace    string          `json:"furnace"`
-	MeasureId  int64           `json:"measure_id"`
-	TimeStamp  time.Time       `json:"time_stamp"`
-	Results    []elementResult `json:"results"`
+	SampleId   int64
+	SampleName string
+	Furnace    string
+	MeasureId  int64
+	TimeStamp  time.Time
+	Results    []elementResult
 }
 
 type elementResult struct {
-	Element string  `json:"element"`
-	Value   float64 `json:"value"`
+	Element string
+	Value   float64
 }
 
-func queryResults(dsn string, numResults int) ([]record, error) {
+// Database to actual.
+var elementMap = map[string]string{
+	"0x00000001-C":  "C",
+	"0x00000003-Si": "Si",
+	"0x00000005-Mn": "Mn",
+	"0x00000007-P":  "P",
+	"0x00000009-S":  "S",
+	"0x00000019-Cu": "Cu",
+	"0x0000000B-Cr": "Cr",
+	"0x00000015-Al": "Al",
+	"0x0000001F-Ti": "Ti",
+	"0x00000027-Sn": "Sn",
+	"0x00000031-Zn": "Zn",
+	"0x00000025-Pb": "Pb",
+}
+
+func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {
 	querySerializer.Lock()
 	defer querySerializer.Unlock()
 
@@ -82,7 +99,7 @@ func queryResults(dsn string, numResults int) ([]record, error) {
 			return nil, fmt.Errorf("error querying 'KMeasureResultTbl': %v", err)
 		}
 
-		rec.Results = make([]elementResult, len(elementOrder))
+		rec.Results = make([]elementResult, len(elementsOrder))
 
 		for measureResultRows.Next() {
 			var elCode string
@@ -94,10 +111,11 @@ func queryResults(dsn string, numResults int) ([]record, error) {
 				return nil, fmt.Errorf("error scanning row from 'KMeasureResultTbl': %v", err)
 			}
 
+			// lookup element from db element value
 			if el, ok := elementMap[elCode]; ok {
-				order := elementOrder[el]
+				order := elementsOrder[el]
 				res := &rec.Results[order]
-				if res.Element == "" {
+				if res.Element == "" { // wouldn't this be always blank?
 					res.Element = el
 					res.Value = elValue
 				}
@@ -105,5 +123,20 @@ func queryResults(dsn string, numResults int) ([]record, error) {
 		}
 		measureResultRows.Close()
 	}
-	return recs, nil
+
+	results := make([]sample.Record, len(recs))
+
+	// turn recs into results
+	for i := range recs {
+		results[i].SampleName = recs[i].SampleName
+		results[i].Furnace = recs[i].Furnace
+		results[i].TimeStamp = recs[i].TimeStamp
+		results[i].Results = make([]sample.ElementResult, len(recs[i].Results))
+		for j := range recs[i].Results {
+			results[i].Results[j].Element = recs[i].Results[j].Element
+			results[i].Results[j].Value = recs[i].Results[j].Value
+		}
+	}
+
+	return results, nil
 }
