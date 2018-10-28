@@ -1,10 +1,14 @@
 # SpectroDashboard
 Dashboard for metal spectrometer results
 
+## Dependencies
+- Go 11.1+
+
 ## Build
-- Run `go get github.com/RoanBrand/SpectroDashboard`
+- Clone or download this repository.
+- Run `go build` inside.
 - Copy the following to a folder where the service will live:  
-  - `SpectroDashboard` executable from `$GOPATH/bin`
+  - `SpectroDashboard` executable`
   - `static` folder
   - `config.json`
   
@@ -15,6 +19,6 @@ Dashboard for metal spectrometer results
 - You can also remove the service with `-service uninstall`
 
 ### Notes
-- Tested with Go 1.10
 - Windows 7  x86 uses DataSource String `Provider=Microsoft.Jet.OLEDB.4.0;`
 - Windows 10 x64 uses DataSource String `Provider=Microsoft.ACE.OLEDB.12.0;`
+- To build for 32 bit, make sure you run `cmd`, followed by `set GOARCH=386`, before running `go build`
