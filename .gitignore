@@ -1,5 +1,9 @@
 .idea
 .vscode/
 
-SpectroDashboard.exe
-SpectroDashboard
+spectrodashboard.log
+
+SpectroDashboardMDB.exe
+SpectroDashboardMDB
+SpectroDashboardXML.exe
+SpectroDashboardXML

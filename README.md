@@ -6,8 +6,9 @@ Dashboard for metal spectrometer results
 
 ## Build
 - Clone or download this repository.
-- Run `go build` inside.
-- Copy the following to a folder where the service will live:  
+- Run `go build cmd\SpectroDashboardMDB\SpectroDashboardMDB.go` inside.
+- Run `go build cmd\SpectroDashboardMDB\SpectroDashboardXML.go`
+- Copy the following to a folder where the services will live:  
   - `SpectroDashboard` executable`
   - `static` folder
   - `config.json`
@@ -15,7 +16,7 @@ Dashboard for metal spectrometer results
 ## Run
 - Configure your `config.json`
 - You can run the service in a terminal, or:
-- You can install it as a OS service with `SpectroDashboard.exe -service install`
+- You can install it as a OS service with `SpectroDashboardXXX.exe -service install`
 - You can also remove the service with `-service uninstall`
 
 ### Notes
