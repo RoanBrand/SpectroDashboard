@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/RoanBrand/SpectroDashboard/log"
 )
@@ -36,4 +37,14 @@ func resultEndpoint(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+}
+
+func GetRemoteResults(remoteAddress string) (*http.Response, error) {
+	if !strings.HasPrefix(remoteAddress, "http://") {
+		remoteAddress = "http://" + remoteAddress
+	}
+	if !strings.HasSuffix(remoteAddress, "/results") {
+		remoteAddress = remoteAddress + "/results"
+	}
+	return http.Get(remoteAddress)
 }

@@ -14,9 +14,6 @@ import (
 	"github.com/kardianos/service"
 )
 
-var logger service.Logger
-var conf *config.Config
-
 type app struct{}
 
 func (p *app) Start(s service.Service) error {
@@ -29,7 +26,7 @@ func (p *app) run() {
 		panic(err)
 	}
 
-	conf, err = config.LoadConfig(filepath.Join(filepath.Dir(execPath), "config.json"))
+	conf, err := config.LoadConfig(filepath.Join(filepath.Dir(execPath), "config.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -77,7 +74,7 @@ func main() {
 		return
 	}
 
-	logger, err = s.Logger(nil)
+	logger, err := s.Logger(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -88,42 +85,6 @@ func main() {
 }
 
 func getResults(conf *config.Config) ([]sample.Record, error) {
-	/*
-		totalMachineResults := 0
-		for _, m := range conf.Machines {
-			totalMachineResults = totalMachineResults + m.SampleLimit
-		}
-
-		results := make([]sample.Record, 0, totalMachineResults)
-
-		for _, m := range conf.Machines {
-			var res []sample.Record
-			var err error
-			switch strings.ToLower(m.DataType) {
-			case "mdb":
-				res, err = mdb_spectro.GetResults(m.DataSource, m.SampleLimit, conf.ElementOrder)
-
-			case "xml":
-				res, err = xml_spectro.GetResults(m.DataSource, m.SampleLimit, conf.ElementOrder)
-			}
-			if err != nil {
-				return nil, err
-			}
-			results = append(results, res...)
-		}
-
-		sort.Slice(results, func(i, j int) bool {
-			return results[i].TimeStamp.After(results[j].TimeStamp)
-		})
-
-		size := conf.NumberOfResults
-		if len(results) < size {
-			size = len(results)
-		}
-		results = results[:size]
-
-		return results, nil*/
-
 	res, err := xml_spectro.GetResults(conf.DataSource, conf.NumberOfResults, conf.ElementOrder)
 	if err != nil {
 		return nil, err

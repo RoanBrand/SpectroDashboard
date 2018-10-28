@@ -3,5 +3,6 @@
 	"http_server_port": "80",
 	"elements_to_display": ["C", "Si", "Mn", "P", "S", "Cu", "Cr", "Al", "Ti", "Sn", "Zn", "Pb"],
 	"number_of_results": 20,
-	"data_source": "A:/Projects/frank westransfer/wetransfer-9c4dbe"
+	"data_source": "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=A:/Projects/SpectroDisplay/AccessDB Example/SpvDB_MeasureResults.mdb;",
+	"remote_machine_address": "localhost:81"
 }

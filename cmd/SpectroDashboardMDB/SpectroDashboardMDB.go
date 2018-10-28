@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -14,9 +15,6 @@ import (
 	"github.com/kardianos/service"
 )
 
-var logger service.Logger
-var conf *config.Config
-
 type app struct{}
 
 func (p *app) Start(s service.Service) error {
@@ -29,7 +27,7 @@ func (p *app) run() {
 		panic(err)
 	}
 
-	conf, err = config.LoadConfig(filepath.Join(filepath.Dir(execPath), "config.json"))
+	conf, err := config.LoadConfig(filepath.Join(filepath.Dir(execPath), "config.json"))
 	if err != nil {
 		panic(err)
 	}
@@ -77,7 +75,7 @@ func main() {
 		return
 	}
 
-	logger, err = s.Logger(nil)
+	logger, err := s.Logger(nil)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -87,15 +85,59 @@ func main() {
 	}
 }
 
+var results []sample.Record
+
 func getResults(conf *config.Config) ([]sample.Record, error) {
+	results = results[:0]
+	var remoteRes []sample.Record
+	remoteDone := make(chan struct{})
+
+	if conf.RemoteMachineAddress != "" {
+		errOccurred := func(err ...interface{}) {
+			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
+		}
+		go func() {
+			defer func() { remoteDone <- struct{}{} }()
+
+			resp, err := http.GetRemoteResults(conf.RemoteMachineAddress)
+			if err != nil {
+				errOccurred(err)
+				return
+			}
+			if resp.StatusCode != 200 {
+				errOccurred(resp.StatusCode, " ", resp.Status)
+			}
+			defer resp.Body.Close()
+
+			dec := json.NewDecoder(resp.Body)
+			err = dec.Decode(&remoteRes)
+			if err != nil {
+				errOccurred(err)
+				return
+			}
+		}()
+
+	}
+
 	res, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults, conf.ElementOrder)
 	if err != nil {
 		return nil, err
 	}
 
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].TimeStamp.After(res[j].TimeStamp)
+	results = append(results, res...)
+	if conf.RemoteMachineAddress != "" {
+		<-remoteDone
+		results = append(results, remoteRes...)
+	}
+
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].TimeStamp.After(results[j].TimeStamp)
 	})
 
-	return res, nil
+	// limit results after merge
+	if len(results) > conf.NumberOfResults {
+		results = results[:conf.NumberOfResults]
+	}
+
+	return results, nil
 }
