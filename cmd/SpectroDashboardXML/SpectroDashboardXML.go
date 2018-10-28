@@ -94,5 +94,9 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		return res[i].TimeStamp.After(res[j].TimeStamp)
 	})
 
+	if len(res) == 0 {
+		log.Println("0 results found in", conf.DataSource)
+	}
+
 	return res, nil
 }

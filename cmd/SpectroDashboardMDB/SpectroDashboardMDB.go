@@ -120,11 +120,15 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	}
 
 	res, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults, conf.ElementOrder)
-	if err != nil {
-		return nil, err
+	if err == nil {
+		results = append(results, res...)
+		if len(res) == 0 {
+			log.Println("0 results found in", conf.DataSource)
+		}
+	} else {
+		log.Println("Error retrieving local results from", conf.DataSource, ":", err)
 	}
 
-	results = append(results, res...)
 	if conf.RemoteMachineAddress != "" {
 		<-remoteDone
 		results = append(results, remoteRes...)
