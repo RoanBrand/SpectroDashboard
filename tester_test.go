@@ -1,89 +1,97 @@
-package main
+package SpectroDashboard_test
 
 import (
 	"encoding/json"
-	"flag"
-	"os"
-	"path/filepath"
-	"sort"
-	"sync"
-	"time"
-
+	"fmt"
 	"github.com/RoanBrand/SpectroDashboard/config"
-	"github.com/RoanBrand/SpectroDashboard/http"
+	ht "github.com/RoanBrand/SpectroDashboard/http"
 	"github.com/RoanBrand/SpectroDashboard/log"
 	"github.com/RoanBrand/SpectroDashboard/mdb_spectro"
 	"github.com/RoanBrand/SpectroDashboard/sample"
-	"github.com/kardianos/service"
+	"math/rand"
+	"net/http"
+	"path/filepath"
+	"sort"
+	"sync"
+	"testing"
+	"time"
 )
 
-type app struct{}
+const (
+	homePath      = "A:/Projects/SpectroDisplay/SpectroDashboard"
+	numResults    = 20
+	numRetrievals = 500
+)
 
-func (p *app) Start(s service.Service) error {
-	go p.run()
-	return nil
-}
-func (p *app) run() {
-	execPath, err := os.Executable()
+func TestResultsRetrieval(t *testing.T) {
+	done := make(chan struct{})
+	errPipe := make(chan string)
+
+	conf, err := config.LoadConfig(filepath.Join(homePath, "config.json"))
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 
-	conf, err := config.LoadConfig(filepath.Join(filepath.Dir(execPath), "config.json"))
-	if err != nil {
-		panic(err)
-	}
+	ht.SetupServer(filepath.Join(homePath, "static"))
 
-	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
-	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
-
-	err = http.StartServer(conf.HTTPServerPort, func() (interface{}, error) {
-		results, err := getResults(conf)
-		if err != nil {
-			return nil, err
+	go func() {
+		if err := ht.StartServer(conf.HTTPServerPort, func() (interface{}, error) {
+			results, err := getResults(conf)
+			if err != nil {
+				return nil, err
+			}
+			return results, nil
+		}); err != nil {
+			errPipe <- err.Error()
 		}
-		return results, nil
-	})
-	if err != nil {
-		panic(err)
-	}
-}
-func (p *app) Stop(s service.Service) error {
-	return nil
-}
+	}()
 
-func main() {
-	svcFlag := flag.String("service", "", "Control the system service.")
-	flag.Parse()
+	time.Sleep(time.Millisecond * 10)
+	var wg sync.WaitGroup
+	wg.Add(numRetrievals)
 
-	svcConfig := &service.Config{
-		Name:        "SpectroDashboard",
-		DisplayName: "Spectrometer Dashboard App",
-		Description: "Provides webpage that displays latest spectrometer results",
+	for i := 0; i < numRetrievals; i++ {
+		go func(i int) {
+			defer wg.Done()
+			time.Sleep(time.Duration(rand.Intn(100)) * time.Millisecond)
+
+			c := http.Client{}
+			resp, err := c.Get("http://localhost:80/results")
+			if err != nil {
+				fmt.Println(i, "error-", err)
+				errPipe <- fmt.Sprintf("Error retrieving results on iteration %d: %s", i, err)
+				fmt.Println(i, "error2-", err)
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				errPipe <- fmt.Sprintf("Error retrieving results on iteration %d: %s", i, err)
+				return
+			}
+
+			var res []sample.Record
+			dec := json.NewDecoder(resp.Body)
+			err = dec.Decode(&res)
+			if resp.StatusCode != http.StatusOK {
+				errPipe <- fmt.Sprintf("Error decoding results on iteration %d: %s", i, err)
+				return
+			}
+
+			if len(res) != numResults {
+				errPipe <- fmt.Sprintf("result length %d, should be %d", len(res), numResults)
+			}
+		}(i)
 	}
 
-	prg := &app{}
-	s, err := service.New(prg, svcConfig)
-	if err != nil {
-		log.Fatal(err)
-	}
+	go func() {
+		wg.Wait()
+		done <- struct{}{}
+	}()
 
-	if *svcFlag != "" {
-		err = service.Control(s, *svcFlag)
-		if err != nil {
-			log.Printf("Valid actions: %q\n", service.ControlAction)
-			log.Fatal(err)
-		}
-		return
-	}
-
-	logger, err := s.Logger(nil)
-	if err != nil {
-		log.Fatal(err)
-	}
-	err = s.Run()
-	if err != nil {
-		logger.Error(err)
+	select {
+	case errMsg := <-errPipe:
+		t.Fatal(errMsg)
+	case <-done:
 	}
 }
 
@@ -125,7 +133,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		go func() {
 			defer func() { remoteDone <- struct{}{} }()
 
-			resp, err := http.GetRemoteResults(conf.RemoteMachineAddress)
+			resp, err := ht.GetRemoteResults(conf.RemoteMachineAddress)
 			if err != nil {
 				errOccurred(err)
 				return
