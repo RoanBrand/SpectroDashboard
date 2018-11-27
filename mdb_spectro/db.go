@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,6 +44,49 @@ var elementMap = map[string]string{
 	"0x00000027-Sn": "Sn",
 	"0x00000031-Zn": "Zn",
 	"0x00000025-Pb": "Pb",
+}
+
+func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]sample.Record, error) {
+	querySerializer.Lock()
+	defer querySerializer.Unlock()
+
+	db, err := sql.Open("adodb", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("error opening db: %v", err)
+	}
+	defer db.Close()
+
+	qry := strings.Builder{}
+	for _, f := range furnaces {
+		qry.WriteString(`
+			(SELECT TOP 1 SampleName, Quality, StoreDateTime
+			FROM KSampleResultTbl WHERE UCASE(Quality) = '` + strings.ToUpper(f) + `'`)
+		if tSamplesOnly {
+			qry.WriteString(` AND UCASE(Right(SampleName,1)) = 'T' `)
+		}
+		qry.WriteString(` ORDER BY SampleResultID DESC) UNION `)
+	}
+
+	qryStr := qry.String()[:qry.Len()-7]
+	sampleRows, err := db.Query(qryStr)
+	if err != nil {
+		return nil, fmt.Errorf("error querying 'KSampleResultTbl': %v", err)
+	}
+	defer sampleRows.Close()
+
+	recs := make([]sample.Record, len(furnaces))
+
+	i := 0
+	for sampleRows.Next() {
+		err := sampleRows.Scan(&recs[i].SampleName, &recs[i].Furnace, &recs[i].TimeStamp)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning row from 'KSampleResultTbl': %v", err)
+		}
+
+		i++
+	}
+
+	return recs[:i], nil
 }
 
 func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {

@@ -37,13 +37,22 @@ func (p *app) run() {
 	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
 	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
 
-	err = http.StartServer(conf.HTTPServerPort, func() (interface{}, error) {
-		results, err := getResults(conf)
-		if err != nil {
-			return nil, err
-		}
-		return results, nil
-	})
+	err = http.StartServer(conf.HTTPServerPort,
+		func() (interface{}, error) {
+			results, err := getResults(conf)
+			if err != nil {
+				return nil, err
+			}
+			return results, nil
+		},
+		func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
+			lastFurnace, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
+			if err != nil {
+				return nil, err
+			}
+
+			return lastFurnace, nil
+		})
 	if err != nil {
 		panic(err)
 	}
@@ -105,12 +114,12 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	// is old, get write lock and perform request
 	lock.RUnlock()
 	lock.Lock()
+	defer lock.Unlock()
 
 	// need to check if result still old, otherwise return new result
 	if time.Now().Sub(age) < time.Second*5 {
 		finalRes := make([]sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
-		lock.Unlock()
 		return finalRes, nil
 	}
 
@@ -171,7 +180,6 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	finalRes := make([]sample.Record, len(cacheResult))
 	copy(finalRes, cacheResult)
 	age = time.Now()
-	lock.Unlock()
 
 	return finalRes, nil
 }

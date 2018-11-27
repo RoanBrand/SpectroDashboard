@@ -40,7 +40,7 @@ func (p *app) run() {
 			return nil, err
 		}
 		return results, nil
-	})
+	}, nil)
 	if err != nil {
 		panic(err)
 	}

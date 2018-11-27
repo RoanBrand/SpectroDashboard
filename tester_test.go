@@ -113,12 +113,12 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	// is old, get write lock and perform request
 	lock.RUnlock()
 	lock.Lock()
+	defer lock.Unlock()
 
 	// need to check if result still old, otherwise return new result
 	if time.Now().Sub(age) < time.Second*5 {
 		finalRes := make([]sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
-		lock.Unlock()
 		return finalRes, nil
 	}
 
@@ -179,7 +179,6 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	finalRes := make([]sample.Record, len(cacheResult))
 	copy(finalRes, cacheResult)
 	age = time.Now()
-	lock.Unlock()
 
 	return finalRes, nil
 }
