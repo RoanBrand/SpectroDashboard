@@ -54,9 +54,9 @@ func main() {
 	flag.Parse()
 
 	svcConfig := &service.Config{
-		Name:        "SpectroDashboard",
+		Name:        "SpectroDashboardXML",
 		DisplayName: "Spectrometer Dashboard App",
-		Description: "Provides webpage that displays latest spectrometer results",
+		Description: "Provides API for latest XML spectrometer results",
 	}
 
 	prg := &app{}

@@ -4,5 +4,13 @@
 	"elements_to_display": ["C", "Si", "Mn", "P", "S", "Cu", "Cr", "Al", "Ti", "Sn", "Zn", "Pb"],
 	"number_of_results": 20,
 	"data_source": "Provider=Microsoft.ACE.OLEDB.12.0;Data Source=A:/Projects/SpectroDisplay/AccessDB Example/SpvDB_MeasureResults.mdb;",
-	"remote_machine_address": "localhost:81"
+	"remote_machine_address": "localhost:81",
+	"remote_database": {
+		"address": "10.10.10.7",
+		"server_name": "AFPSQV01",
+		"user": "Accon",
+		"password": "Accon@123",
+		"database": "Shopware",
+		"table": "AccSpectrograph"
+	}
 }

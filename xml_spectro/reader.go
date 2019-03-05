@@ -81,21 +81,5 @@ func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) 
 		}
 	}
 
-	/*for _, srXML := range results {
-		for _, sr := range srXML.SampleResults {
-			fmt.Printf("Time: %s, SampleID: %s, Furnace: %s, Operator: %s\n", sr.Timestamp, sr.SampleID(), sr.Furnace(), sr.Operator())
-			fmt.Println("Results:")
-			for _, el := range sr.MeasurementStatistics[0].Elements {
-				res := el.reportedResult()
-				if res == nil {
-					fmt.Println(el.Name, "shit")
-					continue
-				}
-				fmt.Println(el.Name, res.ResultValue)
-			}
-			fmt.Println()
-		}
-	}*/
-
 	return recs, nil
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/RoanBrand/SpectroDashboard/log"
 )
@@ -15,6 +16,16 @@ func SetupServer(staticFilesPath string) {
 	http.Handle("/", http.FileServer(http.Dir(staticFilesPath)))
 	http.HandleFunc("/results", resultEndpoint)
 	http.HandleFunc("/lastfurnaceresults", lastFurnaceResult)
+	http.HandleFunc("/gettime", func(w http.ResponseWriter, r *http.Request) {
+		sysTime := struct {
+			T time.Time `json:"t"`
+		}{T: time.Now()}
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(&sysTime); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	})
 }
 
 func StartServer(port string, resultGetter func() (interface{}, error), furnaceResultGetter func([]string, bool) (interface{}, error)) error {
@@ -33,9 +44,8 @@ func resultEndpoint(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enc := json.NewEncoder(w)
 	w.Header().Set("Content-Type", "application/json")
-	err = enc.Encode(results)
+	err = json.NewEncoder(w).Encode(results)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -56,9 +66,8 @@ func lastFurnaceResult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	enc := json.NewEncoder(w)
 	w.Header().Set("Content-Type", "application/json")
-	err = enc.Encode(results)
+	err = json.NewEncoder(w).Encode(results)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

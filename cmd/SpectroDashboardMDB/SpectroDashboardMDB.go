@@ -13,6 +13,7 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/http"
 	"github.com/RoanBrand/SpectroDashboard/log"
 	"github.com/RoanBrand/SpectroDashboard/mdb_spectro"
+	"github.com/RoanBrand/SpectroDashboard/remotedb"
 	"github.com/RoanBrand/SpectroDashboard/sample"
 	"github.com/kardianos/service"
 )
@@ -37,6 +38,13 @@ func (p *app) run() {
 	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
 	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
 
+	if conf.RemoteDatabase.Address != "" {
+		remotedb.SetupRemoteDB(conf)
+		/*if err = getLastInsertRemoteDB(); err != nil {
+			log.Println("Error retrieving last entry from remote MSSQL database:", err)
+		}*/
+	}
+
 	err = http.StartServer(conf.HTTPServerPort,
 		func() (interface{}, error) {
 			results, err := getResults(conf)
@@ -50,7 +58,6 @@ func (p *app) run() {
 			if err != nil {
 				return nil, err
 			}
-
 			return lastFurnace, nil
 		})
 	if err != nil {
@@ -132,7 +139,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
 		}
 		go func() {
-			defer func() { remoteDone <- struct{}{} }()
+			defer func() { close(remoteDone) }()
 
 			resp, err := http.GetRemoteResults(conf.RemoteMachineAddress)
 			if err != nil {
@@ -144,8 +151,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 			}
 			defer resp.Body.Close()
 
-			dec := json.NewDecoder(resp.Body)
-			err = dec.Decode(&remoteRes)
+			err = json.NewDecoder(resp.Body).Decode(&remoteRes)
 			if err != nil {
 				errOccurred(err)
 				return
@@ -180,6 +186,15 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	finalRes := make([]sample.Record, len(cacheResult))
 	copy(finalRes, cacheResult)
 	age = time.Now()
+
+	// go through all results, insert all into remote table that are newer than last inserted
+	if conf.RemoteDatabase.Address != "" {
+		go func() {
+			if err = remotedb.InsertNewResultsRemoteDB(finalRes); err != nil {
+				log.Println("Error inserting new record into remote database:", err)
+			}
+		}()
+	}
 
 	return finalRes, nil
 }
