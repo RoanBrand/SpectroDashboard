@@ -60,6 +60,7 @@ func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) 
 			if err != nil {
 				continue
 			}
+			recs[i].TimeStamp = recs[i].TimeStamp.UTC()
 			recs[i].Results = make([]sample.ElementResult, len(elementsOrder))
 			totalElements := 0
 			for _, el := range sr.MeasurementStatistics[0].Elements {
