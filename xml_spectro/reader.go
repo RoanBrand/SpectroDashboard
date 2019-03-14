@@ -56,11 +56,10 @@ func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) 
 		for _, sr := range srXML.SampleResults {
 			recs[i].SampleName = sr.SampleID()
 			recs[i].Furnace = sr.Furnace()
-			recs[i].TimeStamp, err = time.Parse("2006-01-02T15:04:05", sr.Timestamp)
+			recs[i].TimeStamp, err = time.ParseInLocation("2006-01-02T15:04:05", sr.Timestamp, time.Local)
 			if err != nil {
 				continue
 			}
-			recs[i].TimeStamp = recs[i].TimeStamp.UTC()
 			recs[i].Results = make([]sample.ElementResult, len(elementsOrder))
 			totalElements := 0
 			for _, el := range sr.MeasurementStatistics[0].Elements {

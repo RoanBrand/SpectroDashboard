@@ -146,8 +146,8 @@ func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sam
 		rec.Results = make([]elementResult, len(elementsOrder))
 
 		for measureResultRows.Next() {
-			var elCode string
-			var elValue float64
+			var elCode sql.NullString
+			var elValue sql.NullFloat64
 
 			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp, &elCode, &elValue)
 			if err != nil {
@@ -155,13 +155,17 @@ func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sam
 				return nil, fmt.Errorf("error scanning row from 'KMeasureResultTbl': %v", err)
 			}
 
+			if !elCode.Valid || !elValue.Valid {
+				continue
+			}
+
 			// lookup element from db element value
-			if el, ok := elementMap[elCode]; ok {
+			if el, ok := elementMap[elCode.String]; ok {
 				order := elementsOrder[el]
 				res := &rec.Results[order]
 				if res.Element == "" { // wouldn't this be always blank?
 					res.Element = el
-					res.Value = elValue
+					res.Value = elValue.Float64
 				}
 			}
 		}

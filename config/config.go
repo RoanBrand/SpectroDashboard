@@ -17,7 +17,6 @@ type Config struct {
 
 	RemoteDatabase struct {
 		Address    string `json:"address"`
-		ServerName string `json:"server_name"`
 		User       string `json:"user"`
 		Password   string `json:"password"`
 		Database   string `json:"database"`

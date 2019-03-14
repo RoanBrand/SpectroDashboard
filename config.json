@@ -7,7 +7,6 @@
 	"remote_machine_address": "localhost:81",
 	"remote_database": {
 		"address": "10.10.10.7",
-		"server_name": "AFPSQV01",
 		"user": "Accon",
 		"password": "Accon@123",
 		"database": "Shopware",

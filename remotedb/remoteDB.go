@@ -19,7 +19,7 @@ var timestamp time.Time
 
 func SetupRemoteDB(conf *config.Config) {
 	c := &conf.RemoteDatabase
-	connString = fmt.Sprintf("server=%s\\%s;user id=%s;password=%s;database=%s", c.Address, c.ServerName, c.User, c.Password, c.Database)
+	connString = fmt.Sprintf("server=%s;user id=%s;password=%s;database=%s", c.Address, c.User, c.Password, c.Database)
 	table = c.Table
 }
 
@@ -31,7 +31,7 @@ func getLastInsertRemoteDB() error {
 
 	defer conn.Close()
 
-	err = conn.QueryRow(`SELECT DateTimeStamp FROM ` + table + ` ORDER BY ID DESC LIMIT 1;`).Scan(&timestamp)
+	err = conn.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + table + ` ORDER BY ID DESC;`).Scan(&timestamp)
 	if err != nil {
 		if err != sql.ErrNoRows {
 			return err
@@ -55,7 +55,7 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 	}
 
 	var lastTime time.Time
-	if err = tx.QueryRow(`SELECT DateTimeStamp FROM ` + table + ` ORDER BY ID DESC LIMIT 1;`).Scan(&timestamp); err != nil {
+	if err = tx.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + table + ` ORDER BY ID DESC;`).Scan(&timestamp); err != nil {
 		if err != sql.ErrNoRows {
 			tx.Rollback()
 			return err
@@ -71,14 +71,20 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 		qry := strings.Builder{}
 		qry.WriteString("INSERT INTO ")
 		qry.WriteString(table)
-		qry.WriteString(" (")
+		qry.WriteString(" (DateTimeStamp, SampleName, Furname, ")
 		for j, r := range s.Results {
 			qry.WriteString(r.Element)
 			if j < len(s.Results)-1 {
 				qry.WriteString(", ")
 			}
 		}
-		qry.WriteString(") VALUES (")
+		qry.WriteString(") VALUES ('")
+		qry.WriteString(s.TimeStamp.Format("2006-01-02 15:04:05"))
+		qry.WriteString("', '")
+		qry.WriteString(s.SampleName)
+		qry.WriteString("', '")
+		qry.WriteString(s.Furnace)
+		qry.WriteString("', ")
 		for j, r := range s.Results {
 			qry.WriteString(strconv.FormatFloat(r.Value, 'f', 8, 64))
 			if j < len(s.Results)-1 {
