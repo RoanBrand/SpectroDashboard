@@ -14,31 +14,10 @@ import (
 
 var connString, table string
 
-// last inserted sample
-var timestamp time.Time
-
 func SetupRemoteDB(conf *config.Config) {
 	c := &conf.RemoteDatabase
 	connString = fmt.Sprintf("server=%s;user id=%s;password=%s;database=%s", c.Address, c.User, c.Password, c.Database)
 	table = c.Table
-}
-
-func getLastInsertRemoteDB() error {
-	conn, err := sql.Open("mssql", connString)
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
-	err = conn.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + table + ` ORDER BY ID DESC;`).Scan(&timestamp)
-	if err != nil {
-		if err != sql.ErrNoRows {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func InsertNewResultsRemoteDB(samples []sample.Record) error {
@@ -55,7 +34,7 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 	}
 
 	var lastTime time.Time
-	if err = tx.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + table + ` ORDER BY ID DESC;`).Scan(&timestamp); err != nil {
+	if err = tx.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + table + ` ORDER BY ID DESC;`).Scan(&lastTime); err != nil {
 		if err != sql.ErrNoRows {
 			tx.Rollback()
 			return err
@@ -79,7 +58,8 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 			}
 		}
 		qry.WriteString(") VALUES ('")
-		qry.WriteString(s.TimeStamp.Format("2006-01-02 15:04:05"))
+		ist := s.TimeStamp.Format("2006-01-02 15:04:05")
+		qry.WriteString(ist)
 		qry.WriteString("', '")
 		qry.WriteString(s.SampleName)
 		qry.WriteString("', '")
