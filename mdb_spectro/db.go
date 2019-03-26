@@ -44,6 +44,18 @@ var elementMap = map[string]string{
 	"0x00000027-Sn": "Sn",
 	"0x00000031-Zn": "Zn",
 	"0x00000025-Pb": "Pb",
+	"0x0000000E-Ni": "Ni",
+	"0x00000011-Mo": "Mo",
+	"0x00000017-Co": "Co",
+	"0x0000001D-Nb": "Nb",
+	"0x00000021-V": "V",
+	"0x00000023-W": "W",
+	"0x00000029-Mg": "Mg",
+	"As": "",
+	"0x0000002B-Bi": "Bi",
+	"Ca": "",
+	"": "Sb",
+	"": "Te",
 }
 
 func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]sample.Record, error) {
