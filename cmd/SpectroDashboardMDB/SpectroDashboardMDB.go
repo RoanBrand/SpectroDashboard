@@ -40,9 +40,6 @@ func (p *app) run() {
 
 	if conf.RemoteDatabase.Address != "" {
 		remotedb.SetupRemoteDB(conf)
-		/*if err = getLastInsertRemoteDB(); err != nil {
-			log.Println("Error retrieving last entry from remote MSSQL database:", err)
-		}*/
 	}
 
 	err = http.StartServer(conf.HTTPServerPort,
@@ -132,9 +129,10 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 
 	cacheResult = cacheResult[:0]
 	var remoteRes []sample.Record
-	remoteDone := make(chan struct{})
+	var remoteDone chan struct{}
 
 	if conf.RemoteMachineAddress != "" {
+		remoteDone = make(chan struct{})
 		errOccurred := func(err ...interface{}) {
 			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
 		}
@@ -159,10 +157,38 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		}()
 	}
 
-	res, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults, conf.ElementOrder)
+	var remoteDBRes []sample.Record
+	mdbRes, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults)
 	if err == nil {
-		cacheResult = append(cacheResult, res...)
-		if len(res) == 0 {
+		dispRes := make([]sample.Record, len(mdbRes))
+		remoteDBRes = make([]sample.Record, len(mdbRes))
+		remDBOrder := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca"}
+
+		for i := range mdbRes {
+			dispRes[i].SampleName, remoteDBRes[i].SampleName = mdbRes[i].SampleName, mdbRes[i].SampleName
+			dispRes[i].Furnace, remoteDBRes[i].Furnace = mdbRes[i].Furnace, mdbRes[i].Furnace
+			dispRes[i].TimeStamp, remoteDBRes[i].TimeStamp = mdbRes[i].TimeStamp, mdbRes[i].TimeStamp
+			dispRes[i].Results, remoteDBRes[i].Results = make([]sample.ElementResult, len(conf.ElementOrder)), make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrder))
+			for el, order := range conf.ElementOrder {
+				if elRes, ok := mdbRes[i].Results[el]; ok {
+					dispRes[i].Results[order].Element, remoteDBRes[i].Results[order].Element = el, el
+					dispRes[i].Results[order].Value, remoteDBRes[i].Results[order].Value = elRes, elRes
+				}
+			}
+
+			// remoteDBResults = tv results + extra elements
+			if conf.RemoteDatabase.Address != "" {
+				for order, el := range remDBOrder {
+					if elRes, ok := mdbRes[i].Results[el]; ok {
+						remoteDBRes[i].Results[len(conf.ElementOrder)+order].Element = el
+						remoteDBRes[i].Results[len(conf.ElementOrder)+order].Value = elRes
+					}
+				}
+			}
+		}
+
+		cacheResult = append(cacheResult, dispRes...)
+		if len(dispRes) == 0 {
 			log.Println("0 results found in", conf.DataSource)
 		}
 	} else {
@@ -189,11 +215,11 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 
 	// go through all results, insert all into remote table that are newer than last inserted
 	if conf.RemoteDatabase.Address != "" {
-		go func() {
-			if err = remotedb.InsertNewResultsRemoteDB(finalRes); err != nil {
+		go func(res []sample.Record) {
+			if err = remotedb.InsertNewResultsRemoteDB(res); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
-		}()
+		}(remoteDBRes)
 	}
 
 	return finalRes, nil

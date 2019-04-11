@@ -16,11 +16,11 @@ type Config struct {
 	RemoteMachineAddress string `json:"remote_machine_address"` // optional: mix results with remote spectro
 
 	RemoteDatabase struct {
-		Address    string `json:"address"`
-		User       string `json:"user"`
-		Password   string `json:"password"`
-		Database   string `json:"database"`
-		Table      string `json:"table"`
+		Address  string `json:"address"`
+		User     string `json:"user"`
+		Password string `json:"password"`
+		Database string `json:"database"`
+		Table    string `json:"table"`
 		//Elements   []string `json:"elements"`
 	} `json:"remote_database"`
 

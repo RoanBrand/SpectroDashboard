@@ -22,12 +22,7 @@ type record struct {
 	Furnace    string
 	MeasureId  int64
 	TimeStamp  time.Time
-	Results    []elementResult
-}
-
-type elementResult struct {
-	Element string
-	Value   float64
+	Results    map[string]float64
 }
 
 // Database to actual.
@@ -48,14 +43,14 @@ var elementMap = map[string]string{
 	"0x00000011-Mo": "Mo",
 	"0x00000017-Co": "Co",
 	"0x0000001D-Nb": "Nb",
-	"0x00000021-V": "V",
-	"0x00000023-W": "W",
+	"0x00000021-V":  "V",
+	"0x00000023-W":  "W",
 	"0x00000029-Mg": "Mg",
-	"As": "",
+	// "": "As",
 	"0x0000002B-Bi": "Bi",
-	"Ca": "",
-	"": "Sb",
-	"": "Te",
+	"0x0000002D-Ca": "Ca",
+	// "": "Sb",
+	// "": "Te",
 }
 
 func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]sample.Record, error) {
@@ -101,7 +96,7 @@ func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]
 	return recs[:i], nil
 }
 
-func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {
+func GetResults(dsn string, numResults int) ([]record, error) {
 	querySerializer.Lock()
 	defer querySerializer.Unlock()
 
@@ -155,7 +150,7 @@ func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sam
 			return nil, fmt.Errorf("error querying 'KMeasureResultTbl': %v", err)
 		}
 
-		rec.Results = make([]elementResult, len(elementsOrder))
+		rec.Results = make(map[string]float64, len(elementMap))
 
 		for measureResultRows.Next() {
 			var elCode sql.NullString
@@ -171,32 +166,14 @@ func GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sam
 				continue
 			}
 
-			// lookup element from db element value
 			if el, ok := elementMap[elCode.String]; ok {
-				order := elementsOrder[el]
-				res := &rec.Results[order]
-				if res.Element == "" { // wouldn't this be always blank?
-					res.Element = el
-					res.Value = elValue.Float64
+				if _, ok := rec.Results[el]; !ok {
+					rec.Results[el] = elValue.Float64
 				}
 			}
 		}
 		measureResultRows.Close()
 	}
 
-	results := make([]sample.Record, len(recs))
-
-	// turn recs into results
-	for i := range recs {
-		results[i].SampleName = recs[i].SampleName
-		results[i].Furnace = recs[i].Furnace
-		results[i].TimeStamp = recs[i].TimeStamp
-		results[i].Results = make([]sample.ElementResult, len(recs[i].Results))
-		for j := range recs[i].Results {
-			results[i].Results[j].Element = recs[i].Results[j].Element
-			results[i].Results[j].Value = recs[i].Results[j].Value
-		}
-	}
-
-	return results, nil
+	return recs, nil
 }

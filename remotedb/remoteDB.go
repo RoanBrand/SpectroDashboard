@@ -20,6 +20,7 @@ func SetupRemoteDB(conf *config.Config) {
 	table = c.Table
 }
 
+// Insert new results from spectro machines into remote MS SQL Server database.
 func InsertNewResultsRemoteDB(samples []sample.Record) error {
 	conn, err := sql.Open("mssql", connString)
 	if err != nil {
