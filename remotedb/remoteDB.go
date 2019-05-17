@@ -51,7 +51,7 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 		qry := strings.Builder{}
 		qry.WriteString("INSERT INTO ")
 		qry.WriteString(table)
-		qry.WriteString(" (DateTimeStamp, SampleName, Furname, ")
+		qry.WriteString(" (DateTimeStamp, SampleName, Furname, Spectro, ")
 		for j, r := range s.Results {
 			qry.WriteString(r.Element)
 			if j < len(s.Results)-1 {
@@ -66,6 +66,8 @@ func InsertNewResultsRemoteDB(samples []sample.Record) error {
 		qry.WriteString("', '")
 		qry.WriteString(s.Furnace)
 		qry.WriteString("', ")
+		qry.WriteString(strconv.Itoa(s.Spectro))
+		qry.WriteString(", ")
 		for j, r := range s.Results {
 			qry.WriteString(strconv.FormatFloat(r.Value, 'f', 8, 64))
 			if j < len(s.Results)-1 {

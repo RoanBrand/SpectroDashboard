@@ -21,7 +21,6 @@ type Config struct {
 		Password string `json:"password"`
 		Database string `json:"database"`
 		Table    string `json:"table"`
-		//Elements   []string `json:"elements"`
 	} `json:"remote_database"`
 
 	ElementOrder map[string]int // internal use and just for displays

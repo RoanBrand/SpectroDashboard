@@ -128,9 +128,15 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	}
 
 	cacheResult = cacheResult[:0]
-	var remoteRes []sample.Record
+	var remoteRes []struct {
+		ID        string             `json:"id"`
+		Furnace   string             `json:"furnace"`
+		TimeStamp time.Time          `json:"time_stamp"`
+		Results   map[string]float64 `json:"results"`
+	}
 	var remoteDone chan struct{}
 
+	// get results from remote xml spectro service
 	if conf.RemoteMachineAddress != "" {
 		remoteDone = make(chan struct{})
 		errOccurred := func(err ...interface{}) {
@@ -157,36 +163,24 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		}()
 	}
 
-	var remoteDBRes []sample.Record
+	// get results from local mdb spectro
 	mdbRes, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults)
 	if err == nil {
 		dispRes := make([]sample.Record, len(mdbRes))
-		remoteDBRes = make([]sample.Record, len(mdbRes))
-		remDBOrder := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca"}
-
 		for i := range mdbRes {
-			dispRes[i].SampleName, remoteDBRes[i].SampleName = mdbRes[i].SampleName, mdbRes[i].SampleName
-			dispRes[i].Furnace, remoteDBRes[i].Furnace = mdbRes[i].Furnace, mdbRes[i].Furnace
-			dispRes[i].TimeStamp, remoteDBRes[i].TimeStamp = mdbRes[i].TimeStamp, mdbRes[i].TimeStamp
-			dispRes[i].Results, remoteDBRes[i].Results = make([]sample.ElementResult, len(conf.ElementOrder)), make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrder))
+			dispRes[i].SampleName = mdbRes[i].SampleName
+			dispRes[i].Furnace = mdbRes[i].Furnace
+			dispRes[i].TimeStamp = mdbRes[i].TimeStamp
+			dispRes[i].Results = make([]sample.ElementResult, len(conf.ElementOrder))
 			for el, order := range conf.ElementOrder {
 				if elRes, ok := mdbRes[i].Results[el]; ok {
-					dispRes[i].Results[order].Element, remoteDBRes[i].Results[order].Element = el, el
-					dispRes[i].Results[order].Value, remoteDBRes[i].Results[order].Value = elRes, elRes
-				}
-			}
-
-			// remoteDBResults = tv results + extra elements
-			if conf.RemoteDatabase.Address != "" {
-				for order, el := range remDBOrder {
-					if elRes, ok := mdbRes[i].Results[el]; ok {
-						remoteDBRes[i].Results[len(conf.ElementOrder)+order].Element = el
-						remoteDBRes[i].Results[len(conf.ElementOrder)+order].Value = elRes
-					}
+					dispRes[i].Results[order].Element = el
+					dispRes[i].Results[order].Value = elRes
 				}
 			}
 		}
 
+		// add mdb results to cacheval
 		cacheResult = append(cacheResult, dispRes...)
 		if len(dispRes) == 0 {
 			log.Println("0 results found in", conf.DataSource)
@@ -195,14 +189,91 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		log.Println("Error retrieving local results from", conf.DataSource, ":", err)
 	}
 
+	// add xml results to cacheval
 	if conf.RemoteMachineAddress != "" {
 		<-remoteDone
-		cacheResult = append(cacheResult, remoteRes...)
+		remSampleRes := make([]sample.Record, len(remoteRes))
+		for i, r := range remoteRes {
+			rec := &remSampleRes[i]
+			rec.SampleName = r.ID
+			rec.Furnace = r.Furnace
+			rec.TimeStamp = r.TimeStamp
+			rec.Results = make([]sample.ElementResult, len(conf.ElementOrder))
+			for el, order := range conf.ElementOrder {
+				if elRes, ok := r.Results[el]; ok {
+					rec.Results[order].Element = el
+					rec.Results[order].Value = elRes
+				}
+			}
+		}
+		cacheResult = append(cacheResult, remSampleRes...)
 	}
 
 	sort.Slice(cacheResult, func(i, j int) bool {
 		return cacheResult[i].TimeStamp.After(cacheResult[j].TimeStamp)
 	})
+
+	// format results for remote db storage
+	var remoteDBRes []sample.Record
+	if conf.RemoteDatabase.Address != "" {
+		remoteDBRes = make([]sample.Record, len(mdbRes)+len(remoteRes))
+		remDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca"}
+
+		for i := range mdbRes {
+			// add results from tv
+			rRes := &remoteDBRes[i]
+			rRes.Spectro = 1
+			rRes.SampleName = mdbRes[i].SampleName
+			rRes.Furnace = mdbRes[i].Furnace
+			rRes.TimeStamp = mdbRes[i].TimeStamp
+			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrderMDB))
+			for el, order := range conf.ElementOrder {
+				if elRes, ok := mdbRes[i].Results[el]; ok {
+					rRes.Results[order].Element = el
+					rRes.Results[order].Value = elRes
+				}
+			}
+
+			// add results for extra elements from MDB. remoteDBResults = tv results + extra elements
+			for order, el := range remDBOrderMDB {
+				if elRes, ok := mdbRes[i].Results[el]; ok {
+					rRes.Results[len(conf.ElementOrder)+order].Element = el
+					rRes.Results[len(conf.ElementOrder)+order].Value = elRes
+				}
+			}
+		}
+
+		remDBOrderXML := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te"}
+
+		// add results from xml
+		for i, r := range remoteRes {
+			rRes := &remoteDBRes[len(mdbRes)+i]
+			rRes.Spectro = 3
+			rRes.SampleName = r.ID
+			rRes.Furnace = r.Furnace
+			rRes.TimeStamp = r.TimeStamp
+			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrderXML))
+			for el, order := range conf.ElementOrder {
+				if elRes, ok := r.Results[el]; ok {
+					rRes.Results[order].Element = el
+					rRes.Results[order].Value = elRes
+				}
+			}
+
+			// add results for extra elements from XML
+			for order, el := range remDBOrderXML {
+				if elRes, ok := r.Results[el]; ok {
+					rRes.Results[len(conf.ElementOrder)+order].Element = el
+					rRes.Results[len(conf.ElementOrder)+order].Value = elRes
+				}
+			}
+		}
+
+		// sort
+		sort.Slice(remoteDBRes, func(i, j int) bool {
+			return remoteDBRes[i].TimeStamp.After(remoteDBRes[j].TimeStamp)
+		})
+	}
 
 	// limit results after merge
 	if len(cacheResult) > conf.NumberOfResults {

@@ -7,12 +7,44 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/RoanBrand/SpectroDashboard/sample"
 )
 
+var elements = map[string]struct{}{
+	"C":  {},
+	"Si": {},
+	"Mn": {},
+	"P":  {},
+	"S":  {},
+	"Cu": {},
+	"Cr": {},
+	"Al": {},
+	"Ti": {},
+	"Sn": {},
+	"Zn": {},
+	"Pb": {},
+	"Ni": {},
+	"Mo": {},
+	"Co": {},
+	"Nb": {},
+	"V":  {},
+	"W":  {},
+	"Mg": {},
+	"As": {},
+	"Bi": {},
+	"Ca": {},
+	"Sb": {},
+	"Te": {},
+}
+
+type record struct {
+	ID        string             `json:"id"`
+	Furnace   string             `json:"furnace"`
+	TimeStamp time.Time          `json:"time_stamp"`
+	Results   map[string]float64 `json:"results"`
+}
+
 // GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {
-func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {
+func GetResults(xmlFolder string, numResults int) ([]record, error) {
 	files, err := filepath.Glob(filepath.Join(xmlFolder, "*"))
 	if err != nil {
 		return nil, err
@@ -50,17 +82,19 @@ func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) 
 		}
 	}
 
-	recs := make([]sample.Record, numResults)
+	recs := make([]record, numResults)
 
 	for i, srXML := range results {
-		for _, sr := range srXML.SampleResults {
-			recs[i].SampleName = sr.SampleID()
-			recs[i].Furnace = sr.Furnace()
-			recs[i].TimeStamp, err = time.ParseInLocation("2006-01-02T15:04:05", sr.Timestamp, time.Local)
+		for _, sr := range srXML.SampleResults { // is actually one sample per file
+			rec := &recs[i]
+			rec.ID = sr.SampleID()
+			rec.Furnace = sr.Furnace()
+			rec.TimeStamp, err = time.ParseInLocation("2006-01-02T15:04:05", sr.Timestamp, time.Local)
 			if err != nil {
 				continue
 			}
-			recs[i].Results = make([]sample.ElementResult, len(elementsOrder))
+
+			rec.Results = make(map[string]float64, len(elements))
 			totalElements := 0
 			for _, el := range sr.MeasurementStatistics[0].Elements {
 				res := el.reportedResult()
@@ -69,12 +103,11 @@ func GetResults(xmlFolder string, numResults int, elementsOrder map[string]int) 
 				}
 
 				// lookup element. if not present it is not one we want
-				if order, present := elementsOrder[el.Name]; present {
-					recs[i].Results[order].Element = el.Name
-					recs[i].Results[order].Value = res.ResultValue
+				if _, present := elements[el.Name]; present {
+					rec.Results[el.Name] = res.ResultValue
 					totalElements++
 				}
-				if totalElements == len(elementsOrder) {
+				if totalElements == len(elements) {
 					break
 				}
 			}

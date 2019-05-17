@@ -9,7 +9,6 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/config"
 	"github.com/RoanBrand/SpectroDashboard/http"
 	"github.com/RoanBrand/SpectroDashboard/log"
-	"github.com/RoanBrand/SpectroDashboard/sample"
 	"github.com/RoanBrand/SpectroDashboard/xml_spectro"
 	"github.com/kardianos/service"
 )
@@ -35,11 +34,20 @@ func (p *app) run() {
 	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
 
 	err = http.StartServer(conf.HTTPServerPort, func() (interface{}, error) {
-		results, err := getResults(conf)
+		res, err := xml_spectro.GetResults(conf.DataSource, conf.NumberOfResults)
 		if err != nil {
 			return nil, err
 		}
-		return results, nil
+
+		sort.Slice(res, func(i, j int) bool {
+			return res[i].TimeStamp.After(res[j].TimeStamp)
+		})
+
+		if len(res) == 0 {
+			log.Println("0 results found in", conf.DataSource)
+		}
+
+		return res, nil
 	}, nil)
 	if err != nil {
 		panic(err)
@@ -82,21 +90,4 @@ func main() {
 	if err != nil {
 		logger.Error(err)
 	}
-}
-
-func getResults(conf *config.Config) ([]sample.Record, error) {
-	res, err := xml_spectro.GetResults(conf.DataSource, conf.NumberOfResults, conf.ElementOrder)
-	if err != nil {
-		return nil, err
-	}
-
-	sort.Slice(res, func(i, j int) bool {
-		return res[i].TimeStamp.After(res[j].TimeStamp)
-	})
-
-	if len(res) == 0 {
-		log.Println("0 results found in", conf.DataSource)
-	}
-
-	return res, nil
 }
