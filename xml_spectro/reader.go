@@ -34,6 +34,7 @@ var elements = map[string]struct{}{
 	"Ca": {},
 	"Sb": {},
 	"Te": {},
+	"Fe": {},
 }
 
 type record struct {

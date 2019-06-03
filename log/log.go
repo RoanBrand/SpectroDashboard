@@ -8,13 +8,13 @@ import (
 
 // Print out to console if debug = true
 func Setup(logFilePath string, debugMode bool) {
-	if !debugMode {
+	//if !debugMode {
 		log.SetOutput(&lumberjack.Logger{
 			Filename:   logFilePath,
 			MaxBackups: 3,
 			MaxAge:     28, //days
 		})
-	}
+	//}
 }
 
 func Println(v ...interface{}) {

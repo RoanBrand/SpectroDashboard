@@ -51,6 +51,7 @@ var elementMap = map[string]string{
 	"0x0000002D-Ca": "Ca",
 	// "": "Sb",
 	// "": "Te",
+	"0x00000033-Fe": "Fe",
 }
 
 func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]sample.Record, error) {

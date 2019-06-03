@@ -217,7 +217,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	var remoteDBRes []sample.Record
 	if conf.RemoteDatabase.Address != "" {
 		remoteDBRes = make([]sample.Record, len(mdbRes)+len(remoteRes))
-		remDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca"}
+		remDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "Fe"}
 
 		for i := range mdbRes {
 			// add results from tv
@@ -243,7 +243,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 			}
 		}
 
-		remDBOrderXML := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te"}
+		remDBOrderXML := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
 
 		// add results from xml
 		for i, r := range remoteRes {
@@ -287,7 +287,10 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	// go through all results, insert all into remote table that are newer than last inserted
 	if conf.RemoteDatabase.Address != "" {
 		go func(res []sample.Record) {
-			if err = remotedb.InsertNewResultsRemoteDB(res); err != nil {
+			if conf.DebugMode {
+				log.Printf("forwarding results to remote DB: %+v\n", res)
+			}
+			if err = remotedb.InsertNewResultsRemoteDB(res, conf.DebugMode); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
 		}(remoteDBRes)
