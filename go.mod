@@ -8,3 +8,5 @@ require (
 	github.com/mattn/go-adodb v0.0.0-20181006063745-71e75ebd1d86
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0
 )
+
+go 1.13

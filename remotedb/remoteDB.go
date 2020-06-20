@@ -2,6 +2,7 @@ package remotedb
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -86,12 +87,13 @@ func InsertNewResultsRemoteDB(samples []sample.Record, debug bool) error {
 		}
 		qry.WriteString(");")
 
+		q := qry.String()
 		if debug {
-			log.Println("remote DB query: " + qry.String())
+			log.Println("remote DB query: " + q)
 		}
-		if _, err := tx.Exec(qry.String()); err != nil {
+		if _, err := tx.Exec(q); err != nil {
 			tx.Rollback()
-			return err
+			return errors.New("error executing insert statement: " + q + " Error: " + err.Error())
 		}
 	}
 

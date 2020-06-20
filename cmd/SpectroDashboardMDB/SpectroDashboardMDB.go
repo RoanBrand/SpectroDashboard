@@ -222,7 +222,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		for i := range mdbRes {
 			// add results from tv
 			rRes := &remoteDBRes[i]
-			rRes.Spectro = 1
+			rRes.Spectro = 2
 			rRes.SampleName = mdbRes[i].SampleName
 			rRes.Furnace = mdbRes[i].Furnace
 			rRes.TimeStamp = mdbRes[i].TimeStamp
@@ -287,9 +287,9 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	// go through all results, insert all into remote table that are newer than last inserted
 	if conf.RemoteDatabase.Address != "" {
 		go func(res []sample.Record) {
-			if conf.DebugMode {
+			/*if conf.DebugMode {
 				log.Printf("forwarding results to remote DB: %+v\n", res)
-			}
+			}*/
 			if err = remotedb.InsertNewResultsRemoteDB(res, conf.DebugMode); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
