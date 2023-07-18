@@ -63,18 +63,18 @@ func InsertNewResultsRemoteDB(samples []sample.Record, debug bool) error {
 		qry := strings.Builder{}
 		qry.WriteString(`INSERT INTO "`)
 		qry.WriteString(table)
-		qry.WriteString(`" ("DateTimeStamp", "SampleName", "Furname", "Spectro", "`)
-		for j, r := range s.Results {
+		qry.WriteString(`" ("DateTimeStamp", "SampleName", "Furname", "Spectro"`)
+		for _, r := range s.Results {
 			if r.Element == "" {
 				continue
 			}
 
+			qry.WriteString(`, "`)
 			qry.WriteString(r.Element)
-			if j < len(s.Results)-1 {
-				qry.WriteString(`", "`)
-			}
+			qry.WriteByte('"')
 		}
-		qry.WriteString(`") VALUES ('`)
+		qry.WriteString(`) VALUES ('`)
+		// TODO: check if DB columb can store timezone, and if so, insert raw as query param.
 		qry.WriteString(s.TimeStamp.Format("2006-01-02 15:04:05"))
 		qry.WriteString("', '")
 		qry.WriteString(s.SampleName)
@@ -82,16 +82,13 @@ func InsertNewResultsRemoteDB(samples []sample.Record, debug bool) error {
 		qry.WriteString(s.Furnace)
 		qry.WriteString("', ")
 		qry.WriteString(strconv.Itoa(s.Spectro))
-		qry.WriteString(", ")
-		for j, r := range s.Results {
+		for _, r := range s.Results {
 			if r.Element == "" {
 				continue
 			}
 
+			qry.WriteString(`, `)
 			qry.WriteString(strconv.FormatFloat(r.Value, 'f', 8, 64))
-			if j < len(s.Results)-1 {
-				qry.WriteString(", ")
-			}
 		}
 		qry.WriteString(");")
 

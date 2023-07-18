@@ -7,7 +7,7 @@ Dashboard for metal spectrometer results
 ## Build
 - Clone or download this repository.
 - Run `go build cmd\SpectroDashboardMDB\SpectroDashboardMDB.go` inside.
-- Run `go build cmd\SpectroDashboardMDB\SpectroDashboardXML.go`
+- Run `go build cmd\SpectroDashboardXML\SpectroDashboardXML.go`
 - Copy the following to a folder where the services will live:  
   - `SpectroDashboard` executable`
   - `static` folder

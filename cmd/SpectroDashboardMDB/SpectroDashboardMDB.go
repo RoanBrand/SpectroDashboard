@@ -15,6 +15,7 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/mdb_spectro"
 	"github.com/RoanBrand/SpectroDashboard/remotedb"
 	"github.com/RoanBrand/SpectroDashboard/sample"
+	"github.com/RoanBrand/SpectroDashboard/xml_spectro"
 	"github.com/kardianos/service"
 )
 
@@ -51,11 +52,62 @@ func (p *app) run() {
 			return results, nil
 		},
 		func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
-			lastFurnace, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
+			// get latest results from remote xml spectro 3 service
+			var remoteRes []xml_spectro.Record
+			var remoteDone chan struct{}
+			if conf.RemoteMachineAddress != "" {
+				remoteDone = make(chan struct{})
+				errOccurred := func(err ...interface{}) {
+					log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
+				}
+				go func() {
+					defer func() { close(remoteDone) }()
+
+					resp, err := http.GetRemoteLatestFurnacesResults(conf.RemoteMachineAddress, furnaces)
+					if err != nil {
+						errOccurred(err)
+						return
+					}
+					if resp.StatusCode != 200 {
+						errOccurred(resp.StatusCode, " ", resp.Status)
+					}
+					defer resp.Body.Close()
+
+					err = json.NewDecoder(resp.Body).Decode(&remoteRes)
+					if err != nil {
+						errOccurred(err)
+						return
+					}
+				}()
+			}
+
+			// spectro 2
+			lastFurnaceResults, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
 			if err != nil {
 				return nil, err
 			}
-			return lastFurnace, nil
+
+			// spectro 3
+			if conf.RemoteMachineAddress != "" {
+				<-remoteDone
+				for i, lfr := range lastFurnaceResults {
+					for _, remlfr := range remoteRes {
+						if remlfr.Furnace != lfr.Furnace {
+							continue
+						}
+
+						if remlfr.TimeStamp.Before(lfr.TimeStamp) {
+							continue
+						}
+
+						lastFurnaceResults[i].SampleName = remlfr.ID
+						lastFurnaceResults[i].TimeStamp = remlfr.TimeStamp
+						break
+					}
+				}
+			}
+
+			return lastFurnaceResults, nil
 		})
 	if err != nil {
 		panic(err)
@@ -128,12 +180,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	}
 
 	cacheResult = cacheResult[:0]
-	var remoteRes []struct {
-		ID        string             `json:"id"`
-		Furnace   string             `json:"furnace"`
-		TimeStamp time.Time          `json:"time_stamp"`
-		Results   map[string]float64 `json:"results"`
-	}
+	var remoteRes []xml_spectro.Record
 	var remoteDone chan struct{}
 
 	// get results from remote xml spectro service

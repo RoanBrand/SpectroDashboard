@@ -74,6 +74,7 @@ func lastFurnaceResult(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// for tv
 func GetRemoteResults(remoteAddress string) (*http.Response, error) {
 	if !strings.HasPrefix(remoteAddress, "http://") {
 		remoteAddress = "http://" + remoteAddress
@@ -81,5 +82,24 @@ func GetRemoteResults(remoteAddress string) (*http.Response, error) {
 	if !strings.HasSuffix(remoteAddress, "/results") {
 		remoteAddress = remoteAddress + "/results"
 	}
+	return http.Get(remoteAddress)
+}
+
+func GetRemoteLatestFurnacesResults(remoteAddress string, furnaces []string) (*http.Response, error) {
+	if !strings.HasPrefix(remoteAddress, "http://") {
+		remoteAddress = "http://" + remoteAddress
+	}
+	if !strings.HasSuffix(remoteAddress, "/lastfurnaceresults") {
+		remoteAddress = remoteAddress + "/lastfurnaceresults"
+	}
+	for i, furnace := range furnaces {
+		if i == 0 {
+			remoteAddress += "?f="
+		} else {
+			remoteAddress += "&f="
+		}
+		remoteAddress += furnace
+	}
+
 	return http.Get(remoteAddress)
 }

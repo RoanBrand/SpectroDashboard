@@ -48,7 +48,13 @@ func (p *app) run() {
 		}
 
 		return res, nil
-	}, nil)
+	}, func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
+		lastFurnace, err := xml_spectro.GetLastFurnaceResults(conf.DataSource, furnaces)
+		if err != nil {
+			return nil, err
+		}
+		return lastFurnace, nil
+	})
 	if err != nil {
 		panic(err)
 	}

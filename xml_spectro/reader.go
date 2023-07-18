@@ -37,15 +37,100 @@ var elements = map[string]struct{}{
 	"Fe": {},
 }
 
-type record struct {
+type Record struct {
 	ID        string             `json:"id"`
 	Furnace   string             `json:"furnace"`
 	TimeStamp time.Time          `json:"time_stamp"`
 	Results   map[string]float64 `json:"results"`
 }
 
+func GetLastFurnaceResults(xmlFolder string, furnaces []string) ([]*Record, error) {
+	files, err := filepath.Glob(filepath.Join(xmlFolder, "*"))
+	if err != nil {
+		return nil, err
+	}
+
+	// sort files (spectro XML file names contain dates, so we assume results will be sorted)
+	sort.Slice(files, func(i, j int) bool {
+		return files[i] > files[j]
+	})
+
+	// filter out any non spectro result xml files.
+	xmlFiles := files[:0]
+	for _, file := range files {
+		if filepath.Ext(file) == ".xml" && strings.Contains(file, "spectro") {
+			xmlFiles = append(xmlFiles, file)
+		}
+	}
+
+	furnesLookup := make(map[string]*Record, len(furnaces))
+	for _, f := range furnaces {
+		furnesLookup[strings.ToUpper(f)] = &Record{}
+	}
+
+	neededLookup := make(map[string]struct{}, len(furnaces))
+	for _, f := range furnaces {
+		neededLookup[strings.ToUpper(f)] = struct{}{}
+	}
+
+	var srfile SampleResultsXMLFile
+
+	for _, xmlFile := range xmlFiles {
+		if len(neededLookup) == 0 {
+			break
+		}
+
+		f, err := os.Open(xmlFile)
+		if err != nil {
+			return nil, err
+		}
+
+		dec := xml.NewDecoder(f)
+		err = dec.Decode(&srfile)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, sres := range srfile.SampleResults {
+			f := strings.ToUpper(sres.Furnace())
+			r, ok := furnesLookup[f]
+			if !ok {
+				continue
+			}
+
+			ts, err := time.ParseInLocation("2006-01-02T15:04:05", sres.Timestamp, time.Local)
+			if err != nil {
+				continue
+			}
+
+			if ts.Before(r.TimeStamp) {
+				continue
+			}
+
+			r.ID = sres.SampleID()
+			r.Furnace = f
+			r.TimeStamp = ts
+
+			delete(neededLookup, f)
+		}
+	}
+
+	records := make([]*Record, 0, len(furnaces))
+	for _, fn := range furnaces {
+		fN := strings.ToUpper(fn)
+		r := furnesLookup[fN]
+		if r.ID == "" {
+			continue
+		}
+
+		records = append(records, r)
+	}
+
+	return records, nil
+}
+
 // GetResults(dsn string, numResults int, elementsOrder map[string]int) ([]sample.Record, error) {
-func GetResults(xmlFolder string, numResults int) ([]record, error) {
+func GetResults(xmlFolder string, numResults int) ([]Record, error) {
 	files, err := filepath.Glob(filepath.Join(xmlFolder, "*"))
 	if err != nil {
 		return nil, err
@@ -83,7 +168,7 @@ func GetResults(xmlFolder string, numResults int) ([]record, error) {
 		}
 	}
 
-	recs := make([]record, numResults)
+	recs := make([]Record, numResults)
 
 	for i, srXML := range results {
 		for _, sr := range srXML.SampleResults { // is actually one sample per file
