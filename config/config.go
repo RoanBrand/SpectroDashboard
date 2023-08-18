@@ -13,9 +13,9 @@ type Config struct {
 
 	DataSource           string `json:"data_source"`            // If xml: folder of xml files. If mdb: path to mdb file database.
 	DebugMode            bool   `json:"debug_mode"`             // print logs out to console instead of file when true
-	RemoteMachineAddress string `json:"remote_machine_address"` // optional: mix results with remote spectro
+	RemoteMachineAddress string `json:"remote_machine_address"` // optional: mix results with remote spectro (like spectro 3 xml)
 
-	RemoteDatabase struct {
+	ShopwareDB struct {
 		Address  string `json:"address"`
 		User     string `json:"user"`
 		Password string `json:"password"`

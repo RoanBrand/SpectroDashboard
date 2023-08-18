@@ -13,8 +13,8 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/http"
 	"github.com/RoanBrand/SpectroDashboard/log"
 	"github.com/RoanBrand/SpectroDashboard/mdb_spectro"
-	"github.com/RoanBrand/SpectroDashboard/remotedb"
 	"github.com/RoanBrand/SpectroDashboard/sample"
+	"github.com/RoanBrand/SpectroDashboard/shopwaredb"
 	"github.com/RoanBrand/SpectroDashboard/xml_spectro"
 	"github.com/kardianos/service"
 )
@@ -39,75 +39,16 @@ func (p *app) run() {
 	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
 	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
 
-	if conf.RemoteDatabase.Address != "" {
-		remotedb.SetupRemoteDB(conf)
+	if conf.ShopwareDB.Address != "" {
+		shopwaredb.SetupShopwareDB(conf)
 	}
 
 	err = http.StartServer(conf.HTTPServerPort,
 		func() (interface{}, error) {
-			results, err := getResults(conf)
-			if err != nil {
-				return nil, err
-			}
-			return results, nil
+			return getResults(conf)
 		},
 		func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
-			// get latest results from remote xml spectro 3 service
-			var remoteRes []xml_spectro.Record
-			var remoteDone chan struct{}
-			if conf.RemoteMachineAddress != "" {
-				remoteDone = make(chan struct{})
-				errOccurred := func(err ...interface{}) {
-					log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
-				}
-				go func() {
-					defer func() { close(remoteDone) }()
-
-					resp, err := http.GetRemoteLatestFurnacesResults(conf.RemoteMachineAddress, furnaces)
-					if err != nil {
-						errOccurred(err)
-						return
-					}
-					if resp.StatusCode != 200 {
-						errOccurred(resp.StatusCode, " ", resp.Status)
-					}
-					defer resp.Body.Close()
-
-					err = json.NewDecoder(resp.Body).Decode(&remoteRes)
-					if err != nil {
-						errOccurred(err)
-						return
-					}
-				}()
-			}
-
-			// spectro 2
-			lastFurnaceResults, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
-			if err != nil {
-				return nil, err
-			}
-
-			// spectro 3
-			if conf.RemoteMachineAddress != "" {
-				<-remoteDone
-				for i, lfr := range lastFurnaceResults {
-					for _, remlfr := range remoteRes {
-						if remlfr.Furnace != lfr.Furnace {
-							continue
-						}
-
-						if remlfr.TimeStamp.Before(lfr.TimeStamp) {
-							continue
-						}
-
-						lastFurnaceResults[i].SampleName = remlfr.ID
-						lastFurnaceResults[i].TimeStamp = remlfr.TimeStamp
-						break
-					}
-				}
-			}
-
-			return lastFurnaceResults, nil
+			return getLastResultFurnaces(conf, furnaces, tSamplesOnly)
 		})
 	if err != nil {
 		panic(err)
@@ -157,10 +98,11 @@ var lock sync.RWMutex
 var age time.Time
 var cacheResult []sample.Record
 
+// never returns an error.
 func getResults(conf *config.Config) ([]sample.Record, error) {
 	// check if we have a recent enough result in cache
 	lock.RLock()
-	if time.Now().Sub(age) < time.Second*5 {
+	if time.Since(age) < time.Second*5 {
 		finalRes := make([]sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
 		lock.RUnlock()
@@ -173,24 +115,24 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	defer lock.Unlock()
 
 	// need to check if result still old, otherwise return new result
-	if time.Now().Sub(age) < time.Second*5 {
+	if time.Since(age) < time.Second*5 {
 		finalRes := make([]sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
 		return finalRes, nil
 	}
 
 	cacheResult = cacheResult[:0]
-	var remoteRes []xml_spectro.Record
-	var remoteDone chan struct{}
+	var remoteSpec3Res []xml_spectro.Record
+	var remoteSpec3Done chan struct{}
 
 	// get results from remote xml spectro service
 	if conf.RemoteMachineAddress != "" {
-		remoteDone = make(chan struct{})
+		remoteSpec3Done = make(chan struct{})
 		errOccurred := func(err ...interface{}) {
 			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
 		}
 		go func() {
-			defer func() { close(remoteDone) }()
+			defer func() { close(remoteSpec3Done) }()
 
 			resp, err := http.GetRemoteResults(conf.RemoteMachineAddress)
 			if err != nil {
@@ -202,7 +144,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 			}
 			defer resp.Body.Close()
 
-			err = json.NewDecoder(resp.Body).Decode(&remoteRes)
+			err = json.NewDecoder(resp.Body).Decode(&remoteSpec3Res)
 			if err != nil {
 				errOccurred(err)
 				return
@@ -238,9 +180,9 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 
 	// add xml results to cacheval
 	if conf.RemoteMachineAddress != "" {
-		<-remoteDone
-		remSampleRes := make([]sample.Record, len(remoteRes))
-		for i, r := range remoteRes {
+		<-remoteSpec3Done
+		remSampleRes := make([]sample.Record, len(remoteSpec3Res))
+		for i, r := range remoteSpec3Res {
 			rec := &remSampleRes[i]
 			rec.SampleName = r.ID
 			rec.Furnace = r.Furnace
@@ -260,20 +202,20 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		return cacheResult[i].TimeStamp.After(cacheResult[j].TimeStamp)
 	})
 
-	// format results for remote db storage
-	var remoteDBRes []sample.Record
-	if conf.RemoteDatabase.Address != "" {
-		remoteDBRes = make([]sample.Record, len(mdbRes)+len(remoteRes))
-		remDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "Fe"}
+	// format results for foundry shopware db storage
+	var recsForShopware []sample.Record
+	if conf.ShopwareDB.Address != "" {
+		recsForShopware = make([]sample.Record, len(mdbRes)+len(remoteSpec3Res))
+		shopwareDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "Fe"}
 
 		for i := range mdbRes {
 			// add results from tv
-			rRes := &remoteDBRes[i]
+			rRes := &recsForShopware[i]
 			rRes.Spectro = 2
 			rRes.SampleName = mdbRes[i].SampleName
 			rRes.Furnace = mdbRes[i].Furnace
 			rRes.TimeStamp = mdbRes[i].TimeStamp
-			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrderMDB))
+			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(shopwareDBOrderMDB))
 			for el, order := range conf.ElementOrder {
 				if elRes, ok := mdbRes[i].Results[el]; ok {
 					rRes.Results[order].Element = el
@@ -281,8 +223,8 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 				}
 			}
 
-			// add results for extra elements from MDB. remoteDBResults = tv results + extra elements
-			for order, el := range remDBOrderMDB {
+			// add results for extra elements from MDB. tv results + extra elements
+			for order, el := range shopwareDBOrderMDB {
 				if elRes, ok := mdbRes[i].Results[el]; ok {
 					rRes.Results[len(conf.ElementOrder)+order].Element = el
 					rRes.Results[len(conf.ElementOrder)+order].Value = elRes
@@ -292,9 +234,9 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 
 		remDBOrderXML := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
 
-		// add results from xml
-		for i, r := range remoteRes {
-			rRes := &remoteDBRes[len(mdbRes)+i]
+		// add results from xml spectro 3
+		for i, r := range remoteSpec3Res {
+			rRes := &recsForShopware[len(mdbRes)+i]
 			rRes.Spectro = 3
 			rRes.SampleName = r.ID
 			rRes.Furnace = r.Furnace
@@ -317,8 +259,8 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		}
 
 		// sort
-		sort.Slice(remoteDBRes, func(i, j int) bool {
-			return remoteDBRes[i].TimeStamp.After(remoteDBRes[j].TimeStamp)
+		sort.Slice(recsForShopware, func(i, j int) bool {
+			return recsForShopware[i].TimeStamp.After(recsForShopware[j].TimeStamp)
 		})
 	}
 
@@ -332,16 +274,75 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	age = time.Now()
 
 	// go through all results, insert all into remote table that are newer than last inserted
-	if conf.RemoteDatabase.Address != "" {
+	if conf.ShopwareDB.Address != "" {
 		go func(res []sample.Record) {
 			/*if conf.DebugMode {
 				log.Printf("forwarding results to remote DB: %+v\n", res)
 			}*/
-			if err = remotedb.InsertNewResultsRemoteDB(res, conf.DebugMode); err != nil {
+			if err = shopwaredb.InsertNewResults(res, conf.DebugMode); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
-		}(remoteDBRes)
+		}(recsForShopware)
 	}
 
 	return finalRes, nil
+}
+
+func getLastResultFurnaces(conf *config.Config, furnaces []string, tSamplesOnly bool) (interface{}, error) {
+	// get latest results from remote xml spectro 3 service
+	var remoteRes []xml_spectro.Record
+	var remoteDone chan struct{}
+	if conf.RemoteMachineAddress != "" {
+		remoteDone = make(chan struct{})
+		errOccurred := func(err ...interface{}) {
+			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
+		}
+		go func() {
+			defer func() { close(remoteDone) }()
+
+			resp, err := http.GetRemoteLatestFurnacesResults(conf.RemoteMachineAddress, furnaces)
+			if err != nil {
+				errOccurred(err)
+				return
+			}
+			if resp.StatusCode != 200 {
+				errOccurred(resp.StatusCode, " ", resp.Status)
+			}
+			defer resp.Body.Close()
+
+			err = json.NewDecoder(resp.Body).Decode(&remoteRes)
+			if err != nil {
+				errOccurred(err)
+				return
+			}
+		}()
+	}
+
+	// spectro 2
+	lastFurnaceResults, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
+	if err != nil {
+		return nil, err
+	}
+
+	// spectro 3
+	if conf.RemoteMachineAddress != "" {
+		<-remoteDone
+		for i, lfr := range lastFurnaceResults {
+			for _, remlfr := range remoteRes {
+				if remlfr.Furnace != lfr.Furnace {
+					continue
+				}
+
+				if remlfr.TimeStamp.Before(lfr.TimeStamp) {
+					continue
+				}
+
+				lastFurnaceResults[i].SampleName = remlfr.ID
+				lastFurnaceResults[i].TimeStamp = remlfr.TimeStamp
+				break
+			}
+		}
+	}
+
+	return lastFurnaceResults, nil
 }

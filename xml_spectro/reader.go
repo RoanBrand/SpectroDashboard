@@ -64,12 +64,9 @@ func GetLastFurnaceResults(xmlFolder string, furnaces []string) ([]*Record, erro
 	}
 
 	furnesLookup := make(map[string]*Record, len(furnaces))
-	for _, f := range furnaces {
-		furnesLookup[strings.ToUpper(f)] = &Record{}
-	}
-
 	neededLookup := make(map[string]struct{}, len(furnaces))
 	for _, f := range furnaces {
+		furnesLookup[strings.ToUpper(f)] = &Record{}
 		neededLookup[strings.ToUpper(f)] = struct{}{}
 	}
 
@@ -92,8 +89,8 @@ func GetLastFurnaceResults(xmlFolder string, furnaces []string) ([]*Record, erro
 		}
 
 		for _, sres := range srfile.SampleResults {
-			f := strings.ToUpper(sres.Furnace())
-			r, ok := furnesLookup[f]
+			F := strings.ToUpper(sres.Furnace())
+			r, ok := furnesLookup[F]
 			if !ok {
 				continue
 			}
@@ -108,17 +105,16 @@ func GetLastFurnaceResults(xmlFolder string, furnaces []string) ([]*Record, erro
 			}
 
 			r.ID = sres.SampleID()
-			r.Furnace = f
+			r.Furnace = F
 			r.TimeStamp = ts
 
-			delete(neededLookup, f)
+			delete(neededLookup, F)
 		}
 	}
 
 	records := make([]*Record, 0, len(furnaces))
 	for _, fn := range furnaces {
-		fN := strings.ToUpper(fn)
-		r := furnesLookup[fN]
+		r := furnesLookup[strings.ToUpper(fn)]
 		if r.ID == "" {
 			continue
 		}

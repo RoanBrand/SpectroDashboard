@@ -1,4 +1,4 @@
-package remotedb
+package shopwaredb
 
 import (
 	"database/sql"
@@ -16,14 +16,14 @@ import (
 
 var connString, table string
 
-func SetupRemoteDB(conf *config.Config) {
-	c := &conf.RemoteDatabase
+func SetupShopwareDB(conf *config.Config) {
+	c := &conf.ShopwareDB
 	connString = fmt.Sprintf("server=%s;user id=%s;password=%s;database=%s", c.Address, c.User, c.Password, c.Database)
 	table = c.Table
 }
 
-// Insert new results from spectro machines into remote MS SQL Server database.
-func InsertNewResultsRemoteDB(samples []sample.Record, debug bool) error {
+// Insert new results from spectro machines into foundry's Shopware MS SQL Server database.
+func InsertNewResults(samples []sample.Record, debug bool) error {
 	conn, err := sql.Open("mssql", connString)
 	if err != nil {
 		return err
