@@ -6,7 +6,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/RoanBrand/SpectroDashboard/sample"
 	_ "github.com/mattn/go-adodb"
@@ -16,14 +15,14 @@ import (
 // DB is a file on disk anyway.
 var querySerializer sync.Mutex
 
-type record struct {
+/*type record struct {
 	SampleId   int64
 	SampleName string
 	Furnace    string
 	MeasureId  int64
 	TimeStamp  time.Time
 	Results    map[string]float64
-}
+}*/
 
 // Database to actual.
 var elementMap = map[string]string{
@@ -97,7 +96,7 @@ func GetLastFurnaceResults(dsn string, furnaces []string, tSamplesOnly bool) ([]
 	return recs[:i], nil
 }
 
-func GetResults(dsn string, numResults int) ([]record, error) {
+func GetResults(dsn string, numResults int) ([]*sample.Record, error) {
 	querySerializer.Lock()
 	defer querySerializer.Unlock()
 
@@ -117,47 +116,45 @@ func GetResults(dsn string, numResults int) ([]record, error) {
 	}
 	defer sampleRows.Close()
 
-	recs := make([]record, 0, numResults)
+	recs := make([]*sample.Record, 0, numResults)
 
 	for sampleRows.Next() {
 		var sampleName sql.NullString
 		var furnace sql.NullString
-		rec := record{}
+		r := new(sample.Record)
 
-		err := sampleRows.Scan(&rec.SampleId, &sampleName, &furnace)
+		err := sampleRows.Scan(&r.SampleId, &sampleName, &furnace)
 		if err != nil {
 			return nil, fmt.Errorf("error scanning row from 'KSampleResultTbl': %v", err)
 		}
 
 		if sampleName.Valid {
-			rec.SampleName = sampleName.String
+			r.SampleName = sampleName.String
 		}
 		if furnace.Valid {
-			rec.Furnace = furnace.String
+			r.Furnace = furnace.String
 		}
 
-		recs = append(recs, rec)
+		recs = append(recs, r)
 	}
 
-	for i := range recs {
-		rec := &recs[i]
+	for _, r := range recs {
 		measureResultRows, err := db.Query(`
-			SELECT
-			m.MeasureResultID, m.Timestamp, r.ResultKey, r.Value
+			SELECT m.Timestamp, r.ResultKey, r.Value
 			FROM KMeasureResultTbl m
 			LEFT JOIN KResultValueTbl r ON ((r.MeasureResultID = m.MeasureResultID) AND (r.ResultType = 2) AND (r.Value > 0.0))
-			WHERE m.SampleResultID = ` + strconv.FormatInt(rec.SampleId, 10) + ` AND m.ResultType = 1;`)
+			WHERE m.SampleResultID = ` + strconv.FormatInt(r.SampleId, 10) + ` AND m.ResultType = 1;`)
 		if err != nil {
 			return nil, fmt.Errorf("error querying 'KMeasureResultTbl': %v", err)
 		}
 
-		rec.Results = make(map[string]float64, len(elementMap))
+		r.ResultsMap = make(map[string]float64, len(elementMap))
 
 		for measureResultRows.Next() {
 			var elCode sql.NullString
 			var elValue sql.NullFloat64
 
-			err := measureResultRows.Scan(&rec.MeasureId, &rec.TimeStamp, &elCode, &elValue)
+			err := measureResultRows.Scan(&r.TimeStamp, &elCode, &elValue)
 			if err != nil {
 				measureResultRows.Close()
 				return nil, fmt.Errorf("error scanning row from 'KMeasureResultTbl': %v", err)
@@ -168,8 +165,8 @@ func GetResults(dsn string, numResults int) ([]record, error) {
 			}
 
 			if el, ok := elementMap[elCode.String]; ok {
-				if _, ok := rec.Results[el]; !ok {
-					rec.Results[el] = elValue.Float64
+				if _, ok := r.ResultsMap[el]; !ok {
+					r.ResultsMap[el] = elValue.Float64
 				}
 			}
 		}

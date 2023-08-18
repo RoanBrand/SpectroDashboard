@@ -23,7 +23,7 @@ func SetupShopwareDB(conf *config.Config) {
 }
 
 // Insert new results from spectro machines into foundry's Shopware MS SQL Server database.
-func InsertNewResults(samples []sample.Record, debug bool) error {
+func InsertNewResults(samples []*sample.Record, debug bool) error {
 	conn, err := sql.Open("mssql", connString)
 	if err != nil {
 		return err
@@ -54,8 +54,10 @@ func InsertNewResults(samples []sample.Record, debug bool) error {
 		log.Printf("remote DB last sample timestamp: %s\n", lastTime)
 	}
 
+	extraElementsToAdd := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
+
 	for i := len(samples) - 1; i >= 0; i-- {
-		s := &samples[i]
+		s := samples[i]
 		if !s.TimeStamp.After(lastTime) {
 			continue
 		}
@@ -73,6 +75,13 @@ func InsertNewResults(samples []sample.Record, debug bool) error {
 			qry.WriteString(r.Element)
 			qry.WriteByte('"')
 		}
+		for _, el := range extraElementsToAdd {
+			if _, ok := s.ResultsMap[el]; ok {
+				qry.WriteString(`, "`)
+				qry.WriteString(el)
+				qry.WriteByte('"')
+			}
+		}
 		qry.WriteString(`) VALUES ('`)
 		// TODO: check if DB columb can store timezone, and if so, insert raw as query param.
 		qry.WriteString(s.TimeStamp.Format("2006-01-02 15:04:05"))
@@ -82,6 +91,7 @@ func InsertNewResults(samples []sample.Record, debug bool) error {
 		qry.WriteString(s.Furnace)
 		qry.WriteString("', ")
 		qry.WriteString(strconv.Itoa(s.Spectro))
+
 		for _, r := range s.Results {
 			if r.Element == "" {
 				continue
@@ -90,6 +100,13 @@ func InsertNewResults(samples []sample.Record, debug bool) error {
 			qry.WriteString(`, `)
 			qry.WriteString(strconv.FormatFloat(r.Value, 'f', 8, 64))
 		}
+		for _, el := range extraElementsToAdd {
+			if elRes, ok := s.ResultsMap[el]; ok {
+				qry.WriteString(`, `)
+				qry.WriteString(strconv.FormatFloat(elRes, 'f', 8, 64))
+			}
+		}
+
 		qry.WriteString(");")
 
 		q := qry.String()

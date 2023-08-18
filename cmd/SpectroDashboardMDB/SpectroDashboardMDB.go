@@ -96,14 +96,14 @@ func main() {
 // result cache
 var lock sync.RWMutex
 var age time.Time
-var cacheResult []sample.Record
+var cacheResult []*sample.Record
 
 // never returns an error.
-func getResults(conf *config.Config) ([]sample.Record, error) {
+func getResults(conf *config.Config) ([]*sample.Record, error) {
 	// check if we have a recent enough result in cache
 	lock.RLock()
 	if time.Since(age) < time.Second*5 {
-		finalRes := make([]sample.Record, len(cacheResult))
+		finalRes := make([]*sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
 		lock.RUnlock()
 		return finalRes, nil
@@ -116,7 +116,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 
 	// need to check if result still old, otherwise return new result
 	if time.Since(age) < time.Second*5 {
-		finalRes := make([]sample.Record, len(cacheResult))
+		finalRes := make([]*sample.Record, len(cacheResult))
 		copy(finalRes, cacheResult)
 		return finalRes, nil
 	}
@@ -125,7 +125,7 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 	var remoteSpec3Res []xml_spectro.Record
 	var remoteSpec3Done chan struct{}
 
-	// get results from remote xml spectro service
+	// get results from xml spectro 3 service
 	if conf.RemoteMachineAddress != "" {
 		remoteSpec3Done = make(chan struct{})
 		errOccurred := func(err ...interface{}) {
@@ -152,137 +152,77 @@ func getResults(conf *config.Config) ([]sample.Record, error) {
 		}()
 	}
 
-	// get results from local mdb spectro
+	// get results from local mdb spectro 2
 	mdbRes, err := mdb_spectro.GetResults(conf.DataSource, conf.NumberOfResults)
-	if err == nil {
-		dispRes := make([]sample.Record, len(mdbRes))
-		for i := range mdbRes {
-			dispRes[i].SampleName = mdbRes[i].SampleName
-			dispRes[i].Furnace = mdbRes[i].Furnace
-			dispRes[i].TimeStamp = mdbRes[i].TimeStamp
-			dispRes[i].Results = make([]sample.ElementResult, len(conf.ElementOrder))
+	if err != nil {
+		log.Println("Error retrieving local results from", conf.DataSource, ":", err)
+	} else {
+		// lookup and prepare elements to display
+		for _, r := range mdbRes {
+			r.Results = make([]sample.ElementResult, len(conf.ElementOrder))
+			r.Spectro = 2
+
 			for el, order := range conf.ElementOrder {
-				if elRes, ok := mdbRes[i].Results[el]; ok {
-					dispRes[i].Results[order].Element = el
-					dispRes[i].Results[order].Value = elRes
+				if elRes, ok := r.ResultsMap[el]; ok {
+					r.Results[order].Element = el
+					r.Results[order].Value = elRes
 				}
 			}
 		}
 
 		// add mdb results to cacheval
-		cacheResult = append(cacheResult, dispRes...)
-		if len(dispRes) == 0 {
+		cacheResult = append(cacheResult, mdbRes...)
+		if len(mdbRes) == 0 {
 			log.Println("0 results found in", conf.DataSource)
 		}
-	} else {
-		log.Println("Error retrieving local results from", conf.DataSource, ":", err)
 	}
 
-	// add xml results to cacheval
+	// add spectro 3 xml results to cacheval
 	if conf.RemoteMachineAddress != "" {
 		<-remoteSpec3Done
-		remSampleRes := make([]sample.Record, len(remoteSpec3Res))
-		for i, r := range remoteSpec3Res {
-			rec := &remSampleRes[i]
+		for _, r := range remoteSpec3Res {
+			rec := &sample.Record{}
 			rec.SampleName = r.ID
 			rec.Furnace = r.Furnace
 			rec.TimeStamp = r.TimeStamp
 			rec.Results = make([]sample.ElementResult, len(conf.ElementOrder))
+			rec.Spectro = 3
+			rec.ResultsMap = r.Results
+
 			for el, order := range conf.ElementOrder {
 				if elRes, ok := r.Results[el]; ok {
 					rec.Results[order].Element = el
 					rec.Results[order].Value = elRes
 				}
 			}
+
+			cacheResult = append(cacheResult, rec)
 		}
-		cacheResult = append(cacheResult, remSampleRes...)
 	}
 
 	sort.Slice(cacheResult, func(i, j int) bool {
 		return cacheResult[i].TimeStamp.After(cacheResult[j].TimeStamp)
 	})
 
-	// format results for foundry shopware db storage
-	var recsForShopware []sample.Record
-	if conf.ShopwareDB.Address != "" {
-		recsForShopware = make([]sample.Record, len(mdbRes)+len(remoteSpec3Res))
-		shopwareDBOrderMDB := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "Fe"}
-
-		for i := range mdbRes {
-			// add results from tv
-			rRes := &recsForShopware[i]
-			rRes.Spectro = 2
-			rRes.SampleName = mdbRes[i].SampleName
-			rRes.Furnace = mdbRes[i].Furnace
-			rRes.TimeStamp = mdbRes[i].TimeStamp
-			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(shopwareDBOrderMDB))
-			for el, order := range conf.ElementOrder {
-				if elRes, ok := mdbRes[i].Results[el]; ok {
-					rRes.Results[order].Element = el
-					rRes.Results[order].Value = elRes
-				}
-			}
-
-			// add results for extra elements from MDB. tv results + extra elements
-			for order, el := range shopwareDBOrderMDB {
-				if elRes, ok := mdbRes[i].Results[el]; ok {
-					rRes.Results[len(conf.ElementOrder)+order].Element = el
-					rRes.Results[len(conf.ElementOrder)+order].Value = elRes
-				}
-			}
-		}
-
-		remDBOrderXML := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
-
-		// add results from xml spectro 3
-		for i, r := range remoteSpec3Res {
-			rRes := &recsForShopware[len(mdbRes)+i]
-			rRes.Spectro = 3
-			rRes.SampleName = r.ID
-			rRes.Furnace = r.Furnace
-			rRes.TimeStamp = r.TimeStamp
-			rRes.Results = make([]sample.ElementResult, len(conf.ElementOrder)+len(remDBOrderXML))
-			for el, order := range conf.ElementOrder {
-				if elRes, ok := r.Results[el]; ok {
-					rRes.Results[order].Element = el
-					rRes.Results[order].Value = elRes
-				}
-			}
-
-			// add results for extra elements from XML
-			for order, el := range remDBOrderXML {
-				if elRes, ok := r.Results[el]; ok {
-					rRes.Results[len(conf.ElementOrder)+order].Element = el
-					rRes.Results[len(conf.ElementOrder)+order].Value = elRes
-				}
-			}
-		}
-
-		// sort
-		sort.Slice(recsForShopware, func(i, j int) bool {
-			return recsForShopware[i].TimeStamp.After(recsForShopware[j].TimeStamp)
-		})
-	}
-
 	// limit results after merge
 	if len(cacheResult) > conf.NumberOfResults {
 		cacheResult = cacheResult[:conf.NumberOfResults]
 	}
 
-	finalRes := make([]sample.Record, len(cacheResult))
+	finalRes := make([]*sample.Record, len(cacheResult))
 	copy(finalRes, cacheResult)
 	age = time.Now()
 
 	// go through all results, insert all into remote table that are newer than last inserted
 	if conf.ShopwareDB.Address != "" {
-		go func(res []sample.Record) {
+		go func(res []*sample.Record) {
 			/*if conf.DebugMode {
 				log.Printf("forwarding results to remote DB: %+v\n", res)
 			}*/
 			if err = shopwaredb.InsertNewResults(res, conf.DebugMode); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
-		}(recsForShopware)
+		}(finalRes)
 	}
 
 	return finalRes, nil
