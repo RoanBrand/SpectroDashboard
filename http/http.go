@@ -9,10 +9,14 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/log"
 )
 
-var resultFunc func() (interface{}, error)
+var resultsFunc func() ([]byte, error)
 var furnaceResultFunc func(furnaces []string, tSamplesOnly bool) (interface{}, error)
 
-func SetupServer(staticFilesPath string) {
+func SetupServer(
+	staticFilesPath string,
+	resultsGetter func() ([]byte, error),
+	furnaceResultGetter func([]string, bool) (interface{}, error),
+) {
 	http.Handle("/", http.FileServer(http.Dir(staticFilesPath)))
 	http.HandleFunc("/results", resultEndpoint)
 	http.HandleFunc("/lastfurnaceresults", lastFurnaceResult)
@@ -26,30 +30,25 @@ func SetupServer(staticFilesPath string) {
 			return
 		}
 	})
+
+	resultsFunc = resultsGetter
+	furnaceResultFunc = furnaceResultGetter
 }
 
-func StartServer(port string, resultGetter func() (interface{}, error), furnaceResultGetter func([]string, bool) (interface{}, error)) error {
-	resultFunc = resultGetter
-	furnaceResultFunc = furnaceResultGetter
+func StartServer(port string) error {
 	log.Println("Starting SpectroDashboard service")
 	return http.ListenAndServe(":"+port, nil)
 }
 
 func resultEndpoint(w http.ResponseWriter, r *http.Request) {
-	results, err := resultFunc()
-	if err != nil {
-		errMsg := "Error querying results: " + err.Error()
-		log.Println(errMsg)
-		http.Error(w, errMsg, http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	err = json.NewEncoder(w).Encode(results)
+	resp, err := resultsFunc()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(resp)
 }
 
 func lastFurnaceResult(w http.ResponseWriter, r *http.Request) {

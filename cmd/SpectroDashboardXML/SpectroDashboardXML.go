@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"os"
 	"path/filepath"
@@ -13,7 +14,9 @@ import (
 	"github.com/kardianos/service"
 )
 
-type app struct{}
+type app struct {
+	conf *config.Config
+}
 
 func (p *app) Start(s service.Service) error {
 	go p.run()
@@ -30,32 +33,16 @@ func (p *app) run() {
 		panic(err)
 	}
 
+	p.conf = conf
+
 	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
-	http.SetupServer(filepath.Join(filepath.Dir(execPath), "static"))
+	http.SetupServer(
+		filepath.Join(filepath.Dir(execPath), "static"),
+		p.getAllResults,
+		p.getLastFurnaceResult,
+	)
 
-	err = http.StartServer(conf.HTTPServerPort, func() (interface{}, error) {
-		res, err := xml_spectro.GetResults(conf.DataSource, conf.NumberOfResults)
-		if err != nil {
-			return nil, err
-		}
-
-		sort.Slice(res, func(i, j int) bool {
-			return res[i].TimeStamp.After(res[j].TimeStamp)
-		})
-
-		if len(res) == 0 {
-			log.Println("0 results found in", conf.DataSource)
-		}
-
-		return res, nil
-	}, func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
-		lastFurnace, err := xml_spectro.GetLastFurnaceResults(conf.DataSource, furnaces)
-		if err != nil {
-			return nil, err
-		}
-		return lastFurnace, nil
-	})
-	if err != nil {
+	if err = http.StartServer(conf.HTTPServerPort); err != nil {
 		panic(err)
 	}
 }
@@ -96,4 +83,25 @@ func main() {
 	if err != nil {
 		logger.Error(err)
 	}
+}
+
+func (p *app) getAllResults() ([]byte, error) {
+	res, err := xml_spectro.GetResults(p.conf.DataSource, p.conf.NumberOfResults)
+	if err != nil {
+		return nil, err
+	}
+
+	sort.Slice(res, func(i, j int) bool {
+		return res[i].TimeStamp.After(res[j].TimeStamp)
+	})
+
+	if len(res) == 0 {
+		log.Println("0 results found in", p.conf.DataSource)
+	}
+
+	return json.Marshal(res)
+}
+
+func (p *app) getLastFurnaceResult(furnaces []string, tSamplesOnly bool) (interface{}, error) {
+	return xml_spectro.GetLastFurnaceResults(p.conf.DataSource, furnaces)
 }
