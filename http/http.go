@@ -1,6 +1,7 @@
 package http
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -8,6 +9,8 @@ import (
 
 	"github.com/RoanBrand/SpectroDashboard/log"
 )
+
+var server http.Server
 
 var resultsFunc func() ([]byte, error)
 var furnaceResultFunc func(furnaces []string, tSamplesOnly bool) (interface{}, error)
@@ -37,7 +40,20 @@ func SetupServer(
 
 func StartServer(port string) error {
 	log.Println("Starting SpectroDashboard service")
-	return http.ListenAndServe(":"+port, nil)
+	//return http.ListenAndServe(":"+port, nil)
+	server.Addr = ":" + port
+	err := server.ListenAndServe()
+	if err != nil && err != http.ErrServerClosed {
+		return err
+	}
+
+	return nil
+}
+
+func StopServer() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*10)
+	defer cancel()
+	return server.Shutdown(ctx)
 }
 
 func resultEndpoint(w http.ResponseWriter, r *http.Request) {

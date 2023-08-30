@@ -52,7 +52,7 @@ func (a *app) run() {
 }
 
 func (a *app) Stop(s service.Service) error {
-	return nil
+	return http.StopServer()
 }
 
 func (a *app) getAllResults() ([]byte, error) {

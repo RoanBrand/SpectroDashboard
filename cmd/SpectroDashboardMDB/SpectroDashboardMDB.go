@@ -15,7 +15,7 @@ import (
 	"github.com/RoanBrand/SpectroDashboard/mdb_spectro"
 	"github.com/RoanBrand/SpectroDashboard/sample"
 	"github.com/RoanBrand/SpectroDashboard/shopwaredb"
-	"github.com/RoanBrand/SpectroDashboard/xml_spectro"
+	"github.com/RoanBrand/SpectroDashboard/xml_spectro/fileparser"
 	"github.com/kardianos/service"
 )
 
@@ -121,7 +121,7 @@ func (p *app) getResults() ([]byte, error) {
 	}
 
 	// get new results and update cache
-	var remoteSpec3Res []xml_spectro.Record
+	var remoteSpec3Res []fileparser.Record
 	var remoteSpec3Done chan struct{}
 
 	// get results from xml spectro 3 service
@@ -232,7 +232,7 @@ func (p *app) getResults() ([]byte, error) {
 
 func getLastResultFurnaces(conf *config.Config, furnaces []string, tSamplesOnly bool) (interface{}, error) {
 	// get latest results from remote xml spectro 3 service
-	var remoteRes []xml_spectro.Record
+	var remoteRes []fileparser.Record
 	var remoteDone chan struct{}
 	if conf.RemoteMachineAddress != "" {
 		remoteDone = make(chan struct{})
