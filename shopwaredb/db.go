@@ -83,7 +83,7 @@ func InsertNewResults(samples []*sample.Record, debug bool) error {
 			}
 		}
 		qry.WriteString(`) VALUES ('`)
-		// TODO: check if DB columb can store timezone, and if so, insert raw as query param.
+		// DB column is DATETIME, with no timezone
 		qry.WriteString(s.TimeStamp.Format("2006-01-02 15:04:05"))
 		qry.WriteString("', '")
 		qry.WriteString(s.SampleName)

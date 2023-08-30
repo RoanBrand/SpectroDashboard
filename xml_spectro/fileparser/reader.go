@@ -1,4 +1,4 @@
-package xml_spectro
+package fileparser
 
 import (
 	"encoding/xml"
@@ -70,7 +70,7 @@ func GetLastFurnaceResults(xmlFolder string, furnaces []string) ([]*Record, erro
 		neededLookup[strings.ToUpper(f)] = struct{}{}
 	}
 
-	var srfile SampleResultsXMLFile
+	var srfile sampleResultsXMLFile
 
 	for _, xmlFile := range xmlFiles {
 		if len(neededLookup) == 0 {
@@ -149,7 +149,7 @@ func GetResults(xmlFolder string, numResults int) ([]Record, error) {
 		numResults = len(xmlFiles)
 	}
 
-	results := make([]SampleResultsXMLFile, numResults)
+	results := make([]sampleResultsXMLFile, numResults)
 
 	for i := 0; i < numResults; i++ {
 		f, err := os.Open(xmlFiles[i])
