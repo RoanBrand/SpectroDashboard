@@ -66,7 +66,17 @@ func (sdb *ShopwareDB) openDB() error {
 }
 
 // Insert new results from spectro machines into foundry's Shopware MS SQL Server database.
-func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) error {
+func (sdb *ShopwareDB) InsertNewMDBResults(samples []*sample.Record) error {
+	if len(samples) == 0 {
+		return nil
+	}
+
+	if !sdb.lastInsertedResultTS.IsZero() &&
+		!samples[0].TimeStamp.After(sdb.lastInsertedResultTS) {
+		// if latest sample is not newer than last inserted then nothing to do
+		return nil
+	}
+
 	if sdb.db == nil {
 		err := sdb.openDB()
 		if err != nil {
@@ -79,22 +89,29 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 		return err
 	}
 
+	qry := strings.Builder{}
+	qry.WriteString(`SELECT TOP (1) DateTimeStamp FROM "`)
+	qry.WriteString(sdb.conf.ShopwareDB.Table)
+	qry.WriteString(`" WHERE "Spectro" = @p1`)
+	qry.WriteString(` ORDER BY ID DESC;`)
+
 	var lastTime time.Time
-	if err = tx.QueryRow(`SELECT TOP (1) DateTimeStamp FROM ` + sdb.conf.ShopwareDB.Table + ` ORDER BY ID DESC;`).Scan(&lastTime); err != nil {
-		if err != sql.ErrNoRows {
+	if err = tx.QueryRow(qry.String(), sdb.conf.SpectroNumber).Scan(&lastTime); err != nil {
+		if !errors.Is(err, sql.ErrNoRows) {
 			tx.Rollback()
 			return err
 		}
-	}
+	} else {
+		// We insert wall time (without TZ), so DB returns as UTC. Convert here to SAST, preserving wall clock time.
+		lastTime, err = time.ParseInLocation("2006-01-02 15:04:05", lastTime.Format("2006-01-02 15:04:05"), time.Local)
+		if err != nil {
+			return err
+		}
 
-	// We insert wall time (without TZ), so DB returns as UTC. Convert here to SAST, preserving wall clock time.
-	lastTime, err = time.ParseInLocation("2006-01-02 15:04:05", lastTime.Format("2006-01-02 15:04:05"), time.Local)
-	if err != nil {
-		return err
-	}
-
-	if debug {
-		log.Printf("remote DB last sample timestamp: %s\n", lastTime)
+		sdb.lastInsertedResultTS = lastTime
+		if sdb.conf.DebugMode {
+			log.Printf("remote DB last sample timestamp: %s\n", lastTime)
+		}
 	}
 
 	extraElementsToAdd := []string{"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
@@ -105,7 +122,7 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 			continue
 		}
 
-		qry := strings.Builder{}
+		qry.Reset()
 		qry.WriteString(`INSERT INTO "`)
 		qry.WriteString(sdb.conf.ShopwareDB.Table)
 		qry.WriteString(`" ("DateTimeStamp", "SampleName", "Furname", "Spectro"`)
@@ -133,7 +150,7 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 		qry.WriteString("', '")
 		qry.WriteString(s.Furnace)
 		qry.WriteString("', ")
-		qry.WriteString(strconv.Itoa(s.Spectro))
+		qry.WriteString(strconv.Itoa(sdb.conf.SpectroNumber))
 
 		for _, r := range s.Results {
 			if r.Element == "" {
@@ -153,7 +170,7 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 		qry.WriteString(");")
 
 		q := qry.String()
-		if debug {
+		if sdb.conf.DebugMode {
 			log.Println("remote DB query: " + q)
 		}
 		if _, err := tx.Exec(q); err != nil {
@@ -167,6 +184,7 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 		return err
 	}
 
+	sdb.lastInsertedResultTS = samples[0].TimeStamp
 	return nil
 }
 
@@ -222,7 +240,7 @@ func (sdb *ShopwareDB) InsertNewXMLResults(recs []fileparser.Record) error {
 		"Ni", "Mo", "Co", "Nb", "V", "W", "Mg", "Bi", "Ca", "As", "Sb", "Te", "Fe"}
 
 	for i := len(recs) - 1; i >= 0; i-- { // reverse order: older to newer
-		s := recs[i]
+		s := &recs[i]
 		if !s.TimeStamp.After(lastTime) {
 			continue
 		}

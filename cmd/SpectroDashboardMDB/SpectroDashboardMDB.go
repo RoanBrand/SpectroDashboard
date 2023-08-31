@@ -191,28 +191,37 @@ func (p *app) getResults() ([]byte, error) {
 		}
 	}
 
+	// go through all results, insert all into remote table that are newer than last inserted
+	if p.sdb != nil {
+		if err = p.sdb.InsertNewMDBResults(mdbRes); err != nil {
+			log.Println("Error inserting new record into remote database:", err)
+		}
+	}
+
 	var allResults = mdbRes
 
 	// add spectro 3 xml results to cacheval
 	if p.conf.RemoteMachineAddress != "" {
 		<-remoteSpec3Done
-		for _, r := range remoteSpec3Res {
-			rec := &sample.Record{}
-			rec.SampleName = r.ID
-			rec.Furnace = r.Furnace
-			rec.TimeStamp = r.TimeStamp
-			rec.Results = make([]sample.ElementResult, len(p.conf.ElementOrder))
-			rec.Spectro = 3
-			rec.ResultsMap = r.Results
+		for i := range remoteSpec3Res {
+			xmlR := &remoteSpec3Res[i]
+			sR := &sample.Record{
+				SampleName: xmlR.ID,
+				Furnace:    xmlR.Furnace,
+				TimeStamp:  xmlR.TimeStamp,
+				Results:    make([]sample.ElementResult, len(p.conf.ElementOrder)),
+				Spectro:    3,
+				ResultsMap: xmlR.Results,
+			}
 
 			for el, order := range p.conf.ElementOrder {
-				if elRes, ok := r.Results[el]; ok {
-					rec.Results[order].Element = el
-					rec.Results[order].Value = elRes
+				if elRes, ok := xmlR.Results[el]; ok {
+					sR.Results[order].Element = el
+					sR.Results[order].Value = elRes
 				}
 			}
 
-			allResults = append(allResults, rec)
+			allResults = append(allResults, sR)
 		}
 	}
 
@@ -220,21 +229,9 @@ func (p *app) getResults() ([]byte, error) {
 		return allResults[i].TimeStamp.After(allResults[j].TimeStamp)
 	})
 
-	// limit results after merge
+	// limit results after merge for tv api
 	if len(allResults) > p.conf.NumberOfResults {
 		allResults = allResults[:p.conf.NumberOfResults]
-	}
-
-	// go through all results, insert all into remote table that are newer than last inserted
-	if p.conf.ShopwareDB.Address != "" {
-		go func(res []*sample.Record) {
-			/*if p.conf.DebugMode {
-				log.Printf("forwarding results to remote DB: %+v\n", res)
-			}*/
-			if err = p.sdb.InsertNewResults(res, p.conf.DebugMode); err != nil {
-				log.Println("Error inserting new record into remote database:", err)
-			}
-		}(allResults)
 	}
 
 	resJson, err := json.Marshal(allResults)
