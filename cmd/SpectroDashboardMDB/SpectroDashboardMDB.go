@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -22,15 +23,17 @@ import (
 
 type app struct {
 	conf *config.Config
+	sdb  *shopwaredb.ShopwareDB
 
-	sdb *shopwaredb.ShopwareDB
+	ctx  context.Context
+	ctxD context.CancelFunc
 }
 
 func (p *app) Start(s service.Service) error {
-	go p.run()
+	go p.startup()
 	return nil
 }
-func (p *app) run() {
+func (p *app) startup() {
 	execPath, err := os.Executable()
 	if err != nil {
 		panic(err)
@@ -43,24 +46,25 @@ func (p *app) run() {
 
 	p.conf = conf
 
-	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
-	http.SetupServer(
-		filepath.Join(filepath.Dir(execPath), "static"),
-		p.getResults,
-		func(furnaces []string, tSamplesOnly bool) (interface{}, error) {
-			return getLastResultFurnaces(conf, furnaces, tSamplesOnly)
-		},
-	)
-
 	if conf.ShopwareDB.Address != "" {
 		p.sdb = shopwaredb.SetupShopwareDB(conf)
 	}
+
+	go p.runRoutineJob()
+
+	log.Setup(filepath.Join(filepath.Dir(execPath), "spectrodashboard.log"), conf.DebugMode)
+	http.SetupServer(
+		filepath.Join(filepath.Dir(execPath), "static"),
+		p.getResultsAPI,
+		p.getLastResultFurnacesAPI,
+	)
 
 	if err = http.StartServer(conf.HTTPServerPort); err != nil {
 		panic(err)
 	}
 }
 func (p *app) Stop(s service.Service) error {
+	p.ctxD()
 	err1 := http.StopServer()
 	err2 := p.sdb.Stop()
 
@@ -78,6 +82,28 @@ func (p *app) Stop(s service.Service) error {
 	return nil
 }
 
+func (a *app) runRoutineJob() {
+	interval := time.Second * 30
+	t := time.NewTimer(interval)
+
+	for {
+		select {
+		case <-t.C:
+			if _, err := a.getResultsAPI(); err != nil {
+				log.Println("failed to run routine job:", err)
+			}
+
+			t.Reset(interval)
+
+		case <-a.ctx.Done():
+			if !t.Stop() {
+				<-t.C
+			}
+			return
+		}
+	}
+}
+
 func main() {
 	svcFlag := flag.String("service", "", "Control the system service.")
 	flag.Parse()
@@ -88,7 +114,8 @@ func main() {
 		Description: "Provides webpage that displays latest spectrometer results",
 	}
 
-	prg := &app{}
+	ctx, cancel := context.WithCancel(context.Background())
+	prg := &app{ctx: ctx, ctxD: cancel}
 	s, err := service.New(prg, svcConfig)
 	if err != nil {
 		log.Fatal(err)
@@ -119,7 +146,7 @@ var cAge time.Time
 var cacheResult []byte
 
 // never returns an error.
-func (p *app) getResults() ([]byte, error) {
+func (p *app) getResultsAPI() ([]byte, error) {
 	// check if cache recent enough
 	cLock.RLock()
 	if time.Since(cAge) < time.Second*5 {
@@ -244,19 +271,19 @@ func (p *app) getResults() ([]byte, error) {
 	return resJson, nil
 }
 
-func getLastResultFurnaces(conf *config.Config, furnaces []string, tSamplesOnly bool) (interface{}, error) {
+func (p *app) getLastResultFurnacesAPI(furnaces []string, tSamplesOnly bool) (interface{}, error) {
 	// get latest results from remote xml spectro 3 service
 	var remoteRes []fileparser.Record
 	var remoteDone chan struct{}
-	if conf.RemoteMachineAddress != "" {
+	if p.conf.RemoteMachineAddress != "" {
 		remoteDone = make(chan struct{})
 		errOccurred := func(err ...interface{}) {
-			log.Println("Error retrieving remote results from", conf.RemoteMachineAddress, ":", err)
+			log.Println("Error retrieving remote results from", p.conf.RemoteMachineAddress, ":", err)
 		}
 		go func() {
 			defer func() { close(remoteDone) }()
 
-			resp, err := http.GetRemoteLatestFurnacesResults(conf.RemoteMachineAddress, furnaces)
+			resp, err := http.GetRemoteLatestFurnacesResults(p.conf.RemoteMachineAddress, furnaces)
 			if err != nil {
 				errOccurred(err)
 				return
@@ -275,16 +302,19 @@ func getLastResultFurnaces(conf *config.Config, furnaces []string, tSamplesOnly 
 	}
 
 	// spectro 2
-	lastFurnaceResults, err := mdb_spectro.GetLastFurnaceResults(conf.DataSource, furnaces, tSamplesOnly)
+	lastFurnaceResults, err := mdb_spectro.GetLastFurnaceResults(p.conf.DataSource, furnaces, tSamplesOnly)
 	if err != nil {
 		return nil, err
 	}
 
 	// spectro 3
-	if conf.RemoteMachineAddress != "" {
+	if p.conf.RemoteMachineAddress != "" {
 		<-remoteDone
-		for i, lfr := range lastFurnaceResults {
-			for _, remlfr := range remoteRes {
+		for i := range lastFurnaceResults {
+			lfr := &lastFurnaceResults[i]
+			for j := range remoteRes {
+				remlfr := &remoteRes[j]
+
 				if remlfr.Furnace != lfr.Furnace {
 					continue
 				}
@@ -293,8 +323,8 @@ func getLastResultFurnaces(conf *config.Config, furnaces []string, tSamplesOnly 
 					continue
 				}
 
-				lastFurnaceResults[i].SampleName = remlfr.ID
-				lastFurnaceResults[i].TimeStamp = remlfr.TimeStamp
+				lfr.SampleName = remlfr.ID
+				lfr.TimeStamp = remlfr.TimeStamp
 				break
 			}
 		}
