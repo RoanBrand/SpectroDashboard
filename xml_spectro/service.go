@@ -131,8 +131,6 @@ func (a *app) getAndSaveNewResults() error {
 		}
 	}
 
-	// update latest insertedIntoShopWareDate
-
 	// warm cache
 	resJson, err := json.Marshal(latestRecs)
 	if err != nil {

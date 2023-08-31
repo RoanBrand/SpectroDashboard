@@ -19,6 +19,8 @@ type ShopwareDB struct {
 	conf       *config.Config
 	db         *sql.DB
 	connString string
+
+	lastInsertedResultTS time.Time
 }
 
 func SetupShopwareDB(conf *config.Config) *ShopwareDB {
@@ -169,6 +171,16 @@ func (sdb *ShopwareDB) InsertNewResults(samples []*sample.Record, debug bool) er
 }
 
 func (sdb *ShopwareDB) InsertNewXMLResults(recs []fileparser.Record) error {
+	if len(recs) == 0 {
+		return nil
+	}
+
+	if !sdb.lastInsertedResultTS.IsZero() &&
+		!recs[0].TimeStamp.After(sdb.lastInsertedResultTS) {
+		// if latest result is not newer than last inserted then nothing to do
+		return nil
+	}
+
 	if sdb.db == nil {
 		err := sdb.openDB()
 		if err != nil {
@@ -189,20 +201,21 @@ func (sdb *ShopwareDB) InsertNewXMLResults(recs []fileparser.Record) error {
 
 	var lastTime time.Time
 	if err = tx.QueryRow(qry.String(), sdb.conf.SpectroNumber).Scan(&lastTime); err != nil {
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			tx.Rollback()
 			return err
 		}
-	}
+	} else {
+		// We insert wall time (without TZ), so DB returns as UTC. Convert here to SAST, preserving wall clock time.
+		lastTime, err = time.ParseInLocation("2006-01-02 15:04:05", lastTime.Format("2006-01-02 15:04:05"), time.Local)
+		if err != nil {
+			return err
+		}
 
-	// We insert wall time (without TZ), so DB returns as UTC. Convert here to SAST, preserving wall clock time.
-	lastTime, err = time.ParseInLocation("2006-01-02 15:04:05", lastTime.Format("2006-01-02 15:04:05"), time.Local)
-	if err != nil {
-		return err
-	}
-
-	if sdb.conf.DebugMode {
-		log.Printf("remote DB last sample timestamp: %s\n", lastTime)
+		sdb.lastInsertedResultTS = lastTime
+		if sdb.conf.DebugMode {
+			log.Printf("remote DB last sample timestamp: %s\n", lastTime)
+		}
 	}
 
 	elementsToInsert := []string{"C", "Si", "Mn", "P", "S", "Cu", "Cr", "Al", "Ti", "Sn", "Zn", "Pb",
@@ -260,5 +273,6 @@ func (sdb *ShopwareDB) InsertNewXMLResults(recs []fileparser.Record) error {
 		return err
 	}
 
+	sdb.lastInsertedResultTS = recs[0].TimeStamp
 	return nil
 }
