@@ -2,10 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 )
 
 type Config struct {
+	SpectroNumber         int      `json:"spectro_number"`
 	HTTPServerPort        string   `json:"http_server_port"`
 	ElementsToDisplay     []string `json:"elements_to_display"`
 	NumberOfResults       int      `json:"number_of_results"`       // number of latest results returned to client
@@ -52,9 +54,12 @@ func LoadConfig(filePath string) (*Config, error) {
 	}
 
 	// validation
-	/*if conf.DataSource == "" {
+	if conf.SpectroNumber == 0 {
+		return nil, errors.New("no spectro_number in config file")
+	}
+	if conf.DataSource == "" {
 		return nil, errors.New("no data_source provided in config file")
-	}*/
+	}
 
 	return &conf, nil
 }

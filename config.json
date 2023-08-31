@@ -1,5 +1,6 @@
 {
-	"debug_mode" : true,
+	"spectro_number": 2,
+	"debug_mode": true,
 	"http_server_port": "80",
 	"elements_to_display": ["C", "Si", "Mn", "P", "S", "Cu", "Cr", "Al", "Ti", "Sn", "Zn", "Pb"],
 	"number_of_results": 20,

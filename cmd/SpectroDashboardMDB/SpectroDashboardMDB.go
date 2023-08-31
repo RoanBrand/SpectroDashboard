@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,8 @@ import (
 
 type app struct {
 	conf *config.Config
+
+	sdb *shopwaredb.ShopwareDB
 }
 
 func (p *app) Start(s service.Service) error {
@@ -50,7 +53,7 @@ func (p *app) run() {
 	)
 
 	if conf.ShopwareDB.Address != "" {
-		shopwaredb.SetupShopwareDB(conf)
+		p.sdb = shopwaredb.SetupShopwareDB(conf)
 	}
 
 	if err = http.StartServer(conf.HTTPServerPort); err != nil {
@@ -58,6 +61,20 @@ func (p *app) run() {
 	}
 }
 func (p *app) Stop(s service.Service) error {
+	err1 := http.StopServer()
+	err2 := p.sdb.Stop()
+
+	if err1 != nil {
+		if err2 != nil {
+			return fmt.Errorf("failed to stop http server: %w and %w", err1, err2)
+		}
+
+		return fmt.Errorf("failed to stop http server: %w", err1)
+	}
+	if err2 != nil {
+		return err2
+	}
+
 	return nil
 }
 
@@ -214,7 +231,7 @@ func (p *app) getResults() ([]byte, error) {
 			/*if p.conf.DebugMode {
 				log.Printf("forwarding results to remote DB: %+v\n", res)
 			}*/
-			if err = shopwaredb.InsertNewResults(res, p.conf.DebugMode); err != nil {
+			if err = p.sdb.InsertNewResults(res, p.conf.DebugMode); err != nil {
 				log.Println("Error inserting new record into remote database:", err)
 			}
 		}(allResults)
