@@ -2,10 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 )
 
 type Config struct {
+	SpectroNumber         int      `json:"spectro_number"`
 	HTTPServerPort        string   `json:"http_server_port"`
 	ElementsToDisplay     []string `json:"elements_to_display"`
 	NumberOfResults       int      `json:"number_of_results"`       // number of latest results returned to client
@@ -13,9 +15,9 @@ type Config struct {
 
 	DataSource           string `json:"data_source"`            // If xml: folder of xml files. If mdb: path to mdb file database.
 	DebugMode            bool   `json:"debug_mode"`             // print logs out to console instead of file when true
-	RemoteMachineAddress string `json:"remote_machine_address"` // optional: mix results with remote spectro
+	RemoteMachineAddress string `json:"remote_machine_address"` // optional: mix results with remote spectro (like spectro 3 xml)
 
-	RemoteDatabase struct {
+	ShopwareDB struct {
 		Address  string `json:"address"`
 		User     string `json:"user"`
 		Password string `json:"password"`
@@ -52,9 +54,12 @@ func LoadConfig(filePath string) (*Config, error) {
 	}
 
 	// validation
-	/*if conf.DataSource == "" {
+	if conf.SpectroNumber == 0 {
+		return nil, errors.New("no spectro_number in config file")
+	}
+	if conf.DataSource == "" {
 		return nil, errors.New("no data_source provided in config file")
-	}*/
+	}
 
 	return &conf, nil
 }

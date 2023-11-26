@@ -1,30 +1,32 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-	<meta charset="UTF-8">
-	<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-	<link rel="stylesheet" href="css/bootstrap.min.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <link rel="stylesheet" href="css/bootstrap.min.css">
 
-	<title>SpectroDashboard</title>
+    <title>SpectroDashboard</title>
 
-	<script src="js/jquery-3.2.1.min.js"></script>
-	<script src="js/bootstrap.bundle.min.js"></script>
+    <script src="js/jquery-3.2.1.min.js"></script>
+    <script src="js/bootstrap.bundle.min.js"></script>
 </head>
 <body class="font-weight-bold">
 
 <div id="banner-alert" class="alert alert-danger" style="display: none;" role="alert"></div>
 
 <table class="table table-striped">
-	<thead>
-	<tr id="table-header-row" style="font-size: 1.7em;">
+    <thead>
+    <tr id="table-header-row" style="font-size: 1.7em;">
         <th><h3>LOADING...</h3></th>
     </tr>
-	</thead>
-	<tbody id="table-body" style="font-size: 1.5em"></tbody>
+    </thead>
+    <tbody id="table-body" style="font-size: 1.5em"></tbody>
 </table>
 
 <script>
-	var populateTable = function(res) {
+    var resultsURL = "http://17.0.0.150/results";
+
+    var populateTable = function(res) {
         // Header
         if (res.length > 0) {
             if (res[0].results.length > 0) {
@@ -49,34 +51,62 @@
             tblDataRow += '</tr>';
             $("#table-body").append(tblDataRow);
         }
-	};
+    };
 
-	var getResults = function() {
-        $.get("results")
-			.done(function(res) {
-                $("#banner-alert").hide();
-				populateTable(res);
-			})
-			.fail(function(err) {
-				console.error(err);
-                $("#table-header-row").empty();
-                $("#table-body").empty();
+    var periodMs = 10000;
+    var timeoutMs = 8000;
+
+    var periodErrMs = 1000;
+    var errRemainingTime;
+    var connFailTimer;
+
+    var displayError = function(msg) {
+        $("#banner-alert").html(msg + '. Retrying in ' + errRemainingTime/1000 + 's');
+    };
+    var errRefresh = function(msg) {
+        var msg = msg;
+        return function() {
+            errRemainingTime -= periodErrMs;
+            displayError(msg);
+        }
+    };
+    var handleError = function(msg) {
+        errRemainingTime = periodMs
+        displayError(msg);
+        connFailTimer = setInterval(errRefresh(msg), periodErrMs);
+    };
+
+    var getResults = function() {
+        clearInterval(connFailTimer);
+        $("#banner-alert").hide();
+
+        $.ajax(resultsURL, {timeout: timeoutMs})
+            .done(function(res) {
+                populateTable(res);
+            })
+            .fail(function(err) {
+                console.error(err);
+
                 if (err.readyState === 0) {
-                    // browser unable to open tcp connection.
-					var dst = window.location.protocol + "//" + window.location.hostname + (window.location.port ? ':' + window.location.port: '');
-                    $("#banner-alert").html('Unable to make connection to server "' + dst + '"')
-				} else {
-                    $("#banner-alert").html(err.responseText);
-				}
+                    if (err.statusText == "timeout") {
+                        handleError('Timeout connecting to: "' + resultsURL + '"');
+                    } else {
+                        handleError('Unable to make connection to: "' + resultsURL + '"');
+                    }
+                } else {
+                    handleError('Server "' + resultsURL + '" error: (' + err.status + ') ' + err.statusText + ': ' + err.responseText);
+                }
                 $("#banner-alert").show();
-			});
-	};
+            })
+            .always(function() {
+                setTimeout(getResults, periodMs);
+            });
+    };
 
-	// Init
-	$(function() {
+    // Init
+    $(function() {
         getResults();
-	    setInterval(getResults, 10000);
-	});
+    });
 </script>
 
 </body>

@@ -1,7 +1,7 @@
-package xml_spectro
+package fileparser
 
 // Every file seems to contain only one sample result, but it may have more.
-type SampleResultsXMLFile struct {
+type sampleResultsXMLFile struct {
 	SampleResults []SampleResult `xml:"SampleResult"`
 }
 
