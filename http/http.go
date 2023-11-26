@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ func StartServer(port string) error {
 	//return http.ListenAndServe(":"+port, nil)
 	server.Addr = ":" + port
 	err := server.ListenAndServe()
-	if err != nil && err != http.ErrServerClosed {
+	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 
