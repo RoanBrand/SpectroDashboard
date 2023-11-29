@@ -127,7 +127,7 @@ func (a *app) getAndSaveNewResults() error {
 	// insert shopware
 	if a.sdb != nil {
 		if err = a.sdb.InsertNewXMLResults(latestRecs); err != nil {
-			log.Println("failed to inser new records into shopware DB:", err)
+			log.Println("failed to insert new records into shopware DB:", err)
 		}
 	}
 

@@ -24,7 +24,8 @@
 </table>
 
 <script>
-    var resultsURL = "http://17.0.0.150/results";
+    // if run from local file, origin is "null", so make absolute url to server.
+    var resultsURL = window.location.origin.startsWith("file:") ? "http://17.0.0.150/results": "results";
 
     var populateTable = function(res) {
         // Header

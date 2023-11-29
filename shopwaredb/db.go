@@ -52,7 +52,7 @@ func (sdb *ShopwareDB) Stop() error {
 }
 
 func (sdb *ShopwareDB) openDB() error {
-	db, err := sql.Open("mssql", sdb.connString)
+	db, err := sql.Open("sqlserver", sdb.connString)
 	if err != nil {
 		return fmt.Errorf("failed opening shopware DB: %w", err)
 	}

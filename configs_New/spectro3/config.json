@@ -1,0 +1,13 @@
+{
+	"spectro_number": 3,
+	"http_server_port": "80",
+	"number_of_results": 20,
+	"data_source": "C:\\Spectro Smart Studio\\Sample Results",
+	"remote_database": {
+		"address": "10.33.33.117",
+		"user": "Accon",
+		"password": "Accon@123",
+		"database": "Shopware",
+		"table": "AccSpectrograph"
+	}
+}
